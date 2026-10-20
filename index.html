@@ -1,0 +1,2365 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mi Grabador v3 — Pantalla · Cámara · Voz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<!-- Motion (la versión para JavaScript normal de framer-motion) -->
+<script src="https://cdn.jsdelivr.net/npm/motion@12.43.0/dist/motion.js"></script>
+<!-- PeerJS: WebRTC para la videollamada y el chat (sin claves ni servidor propio) -->
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  /* ===== Tokens (ui-ux-pro-max: flat, teal + naranja de acción, modo oscuro) ===== */
+  :root{
+    --bg:#0A1113;
+    --surface:#101A1D;
+    --surface-2:#152326;
+    --surface-3:#1B2D31;
+    --border:#20363A;
+    --border-strong:#2D4A4F;
+    --text:#E7F5F2;
+    --muted:#93ABA8;
+    --primary:#14B8A6;
+    --primary-ink:#03201C;
+    --primary-soft:#0F3B37;
+    --accent:#F97316;
+    --accent-ink:#1F0D02;
+    --danger:#F43F5E;
+    --danger-soft:#3A1520;
+    --warn:#F59E0B;
+    --ring:#2DD4BF;
+    --radius:14px;
+    --radius-lg:20px;
+    --font:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;min-height:100vh;color:var(--text);background:var(--bg);
+    font-family:var(--font);font-size:15px;line-height:1.5;
+    background-image:
+      radial-gradient(900px 480px at 85% -10%,rgba(20,184,166,.10),transparent 60%),
+      radial-gradient(700px 420px at -10% 110%,rgba(249,115,22,.07),transparent 60%);
+    background-attachment:fixed;
+  }
+  svg.ic{width:18px;height:18px;flex:0 0 auto;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .oculto{display:none !important}
+  :focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+  button,a,label,select,input{font-family:inherit}
+  button,a,select,label:has(input){cursor:pointer}
+
+  /* ===== Navbar ===== */
+  .nav{
+    position:sticky;top:0;z-index:20;
+    background:rgba(10,17,19,.82);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--border);
+  }
+  .nav-in{max-width:1280px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:14px}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;letter-spacing:-.2px}
+  .logo-mark{
+    width:34px;height:34px;border-radius:10px;display:grid;place-items:center;
+    background:var(--primary-soft);color:var(--primary);border:1px solid var(--border-strong);
+  }
+  .logo-mark i{width:12px;height:12px;border-radius:50%;background:var(--accent);display:block}
+  .badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--surface-3);color:var(--muted);border:1px solid var(--border)}
+  .nav-sub{color:var(--muted);font-size:13px;display:none}
+  @media (min-width:900px){ .nav-sub{display:block} }
+  .chip-estado{
+    margin-left:auto;display:inline-flex;align-items:center;gap:8px;
+    padding:6px 12px;border-radius:999px;font-size:13px;font-weight:600;
+    background:var(--surface-2);border:1px solid var(--border);color:var(--muted);
+  }
+  .chip-estado .led{width:8px;height:8px;border-radius:50%;background:var(--primary)}
+  .chip-estado .t-rec,.chip-estado .t-pausa{display:none}
+  body.rec .chip-estado{color:#FFD5DD;background:var(--danger-soft);border-color:#5B2030}
+  body.rec .chip-estado .led{background:var(--danger);animation:latido 1s infinite}
+  body.rec .chip-estado .t-listo{display:none}
+  body.rec .chip-estado .t-rec{display:inline}
+  body.rec.pausa .chip-estado{color:#FDE7C2;background:#33260C;border-color:#5A4312}
+  body.rec.pausa .chip-estado .led{background:var(--warn);animation:none}
+  body.rec.pausa .chip-estado .t-rec{display:none}
+  body.rec.pausa .chip-estado .t-pausa{display:inline}
+  @keyframes latido{50%{opacity:.25}}
+
+  /* ===== Layout ===== */
+  .shell{max-width:1280px;margin:0 auto;padding:20px;display:grid;gap:20px;grid-template-columns:minmax(0,1fr)}
+  @media (min-width:1040px){ .shell{grid-template-columns:minmax(0,1fr) 360px;align-items:start} }
+  .col{display:flex;flex-direction:column;gap:20px;min-width:0}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px}
+  .card-h{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  .card-h h2{margin:0;font-size:14px;font-weight:600;letter-spacing:.1px}
+  .card-h .hint{margin-left:auto;font-size:12px;color:var(--muted)}
+  .card-h svg.ic{color:var(--primary);width:17px;height:17px}
+
+  /* ===== Aviso ===== */
+  .aviso{
+    display:flex;gap:12px;align-items:flex-start;
+    background:var(--danger-soft);border:1px solid #5B2030;color:#FFD9E0;
+    padding:14px 16px;border-radius:var(--radius);font-size:14px;line-height:1.55;
+  }
+  .aviso svg.ic{color:var(--danger);margin-top:2px}
+  .aviso code{background:rgba(0,0,0,.35);padding:2px 7px;border-radius:6px;font-family:var(--mono);font-size:12.5px;white-space:nowrap}
+
+  /* ===== Escenario (vista previa) ===== */
+  .stage{padding:0;overflow:hidden}
+  .vista{
+    position:relative;background:#04090A;min-height:300px;aspect-ratio:16/9;max-height:72vh;
+    display:flex;align-items:center;justify-content:center;
+    background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
+    background-size:32px 32px;
+  }
+  #lienzo{width:100%;height:100%;object-fit:contain;display:block;background:#04090A}
+  .vacio-vista{color:var(--muted);text-align:center;padding:40px 20px;max-width:380px}
+  .vacio-vista .iconos{display:flex;justify-content:center;gap:10px;margin-bottom:16px}
+  .vacio-vista .iconos span{
+    width:48px;height:48px;border-radius:14px;display:grid;place-items:center;
+    background:var(--surface-2);border:1px solid var(--border);color:var(--primary);
+  }
+  .vacio-vista .iconos svg.ic{width:22px;height:22px}
+  .vacio-vista strong{color:var(--text);display:block;font-size:16px;margin-bottom:4px}
+  .vacio-vista p{margin:0;font-size:14px}
+  .solo-audio{text-align:center;color:var(--muted)}
+  .barras{display:flex;align-items:flex-end;justify-content:center;gap:6px;height:56px;margin-bottom:14px}
+  .barras i{width:7px;border-radius:4px;background:var(--primary);height:30%;animation:barra 1.1s ease-in-out infinite}
+  .barras i:nth-child(2){animation-delay:.15s}.barras i:nth-child(3){animation-delay:.3s}
+  .barras i:nth-child(4){animation-delay:.45s}.barras i:nth-child(5){animation-delay:.6s}
+  @keyframes barra{50%{height:100%}}
+  .solo-audio strong{display:block;color:var(--text);font-size:16px}
+  .cuenta span{display:inline-block}
+  .rec-badge{
+    position:absolute;top:14px;left:14px;display:none;align-items:center;gap:8px;
+    padding:6px 12px;border-radius:999px;font-size:12px;font-weight:700;letter-spacing:.6px;
+    background:rgba(244,63,94,.92);color:#fff;
+  }
+  .rec-badge i{width:8px;height:8px;border-radius:50%;background:#fff;animation:latido 1s infinite}
+  body.rec .rec-badge{display:inline-flex}
+  body.rec.pausa .rec-badge{background:rgba(245,158,11,.95);color:#1F1402}
+  body.rec.pausa .rec-badge i{animation:none;background:#1F1402}
+  .cuenta{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    background:rgba(4,9,10,.82);backdrop-filter:blur(4px);
+    font-family:var(--mono);font-size:clamp(80px,14vw,140px);font-weight:700;color:#fff;
+  }
+
+  /* ===== Dock de controles ===== */
+  .dock{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:14px 16px;border-top:1px solid var(--border);background:var(--surface)}
+  .btn{
+    min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    border:1px solid transparent;border-radius:12px;padding:0 18px;
+    font-size:14.5px;font-weight:600;color:var(--text);background:var(--surface-3);
+    transition:background-color .18s ease,border-color .18s ease,color .18s ease,opacity .18s ease;
+  }
+  .btn:disabled{opacity:.38;cursor:not-allowed}
+  .btn-cta{background:var(--accent);color:var(--accent-ink)}
+  .btn-cta:hover:not(:disabled){background:#FB8A3C}
+  .btn-cta .punto-rec{width:10px;height:10px;border-radius:50%;background:var(--accent-ink)}
+  .btn-sec{background:transparent;border-color:var(--border-strong)}
+  .btn-sec:hover:not(:disabled){background:var(--surface-2)}
+  .btn-peligro{background:var(--danger);color:#fff}
+  .btn-peligro:hover:not(:disabled){background:#F65C77}
+  #btnPausar .i-play{display:none}
+  body.pausa #btnPausar .i-play{display:block}
+  body.pausa #btnPausar .i-pause{display:none}
+  .cronometro{
+    margin-left:auto;display:flex;align-items:center;gap:10px;
+    font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:22px;font-weight:700;color:var(--muted);
+    padding:6px 14px;border-radius:12px;background:var(--surface-2);border:1px solid var(--border);
+  }
+  .cronometro .led{width:9px;height:9px;border-radius:50%;background:var(--border-strong)}
+  body.rec .cronometro{color:#FFB3C1}
+  body.rec .cronometro .led{background:var(--danger);animation:latido 1s infinite}
+  body.pausa .cronometro{color:#FCD58A}
+  body.pausa .cronometro .led{background:var(--warn);animation:none}
+  @media (max-width:560px){ .cronometro{margin-left:0;width:100%;justify-content:center} .dock .btn{flex:1 1 auto} }
+
+  .estado{padding:0 16px 14px;font-size:14px;color:var(--muted);min-height:22px;background:var(--surface)}
+  .estado.grabando{color:var(--primary)}
+  .estado.error{color:#FF8DA1}
+
+  /* ===== Opciones (switches) ===== */
+  .opciones{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 18px}
+  @media (max-width:640px){ .opciones{grid-template-columns:minmax(0,1fr)} }
+  .switch{display:flex;align-items:center;gap:12px;min-height:44px;font-size:14px;color:var(--text)}
+  .switch input{
+    appearance:none;-webkit-appearance:none;margin:0;flex:0 0 auto;
+    width:40px;height:22px;border-radius:999px;background:var(--surface-3);border:1px solid var(--border-strong);
+    position:relative;transition:background-color .18s ease,border-color .18s ease;cursor:pointer;
+  }
+  .switch input::after{
+    content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;
+    background:var(--muted);transition:transform .2s ease,background-color .18s ease;
+  }
+  .switch input:checked{background:var(--primary);border-color:var(--primary)}
+  .switch input:checked::after{transform:translateX(18px);background:var(--primary-ink)}
+  .switch input:disabled{opacity:.4;cursor:not-allowed}
+
+  /* ===== Fuentes ===== */
+  .fuentes{display:flex;flex-direction:column;gap:10px}
+  .fuente-boton{
+    width:100%;display:flex;align-items:center;gap:14px;min-height:64px;
+    background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);
+    padding:12px 14px;color:var(--text);text-align:left;
+    transition:border-color .18s ease,background-color .18s ease;
+  }
+  .fuente-boton:hover:not(:disabled){border-color:var(--border-strong);background:var(--surface-3)}
+  .fuente-boton .icono{
+    width:40px;height:40px;border-radius:11px;display:grid;place-items:center;flex:0 0 auto;
+    background:var(--surface-3);color:var(--muted);transition:background-color .18s ease,color .18s ease;
+  }
+  .fuente-boton .icono svg.ic{width:20px;height:20px}
+  .fuente-boton .textos{display:flex;flex-direction:column;min-width:0}
+  .fuente-boton .nombre{font-size:15px;font-weight:600}
+  .fuente-boton .mini{font-size:12.5px;color:var(--muted)}
+  .fuente-boton .tecla{margin-left:auto;white-space:nowrap;font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .fuente-boton .punto{
+    width:36px;height:20px;border-radius:999px;background:var(--surface-3);border:1px solid var(--border-strong);
+    position:relative;flex:0 0 auto;transition:background-color .18s ease,border-color .18s ease;
+  }
+  .fuente-boton .punto::after{
+    content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;
+    background:var(--muted);transition:transform .2s ease,background-color .18s ease;
+  }
+  .fuente-boton.activo{border-color:var(--primary);background:var(--primary-soft)}
+  .fuente-boton.activo .icono{background:var(--primary);color:var(--primary-ink)}
+  .fuente-boton.activo .punto{background:var(--primary);border-color:var(--primary)}
+  .fuente-boton.activo .punto::after{transform:translateX(16px);background:var(--primary-ink)}
+  .fuente-boton:disabled{opacity:.5;cursor:not-allowed}
+  .medidor-fila{display:flex;align-items:center;gap:10px;margin-top:6px;font-size:12px;color:var(--muted)}
+  .medidor-fila svg.ic{width:15px;height:15px}
+  .medidor{flex:1;height:6px;border-radius:99px;background:var(--surface-3);overflow:hidden}
+  .medidor span{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--primary),var(--warn) 75%,var(--danger));transition:width .06s linear}
+
+  /* ===== Ajustes ===== */
+  .ajustes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  @media (max-width:420px){ .ajustes{grid-template-columns:minmax(0,1fr)} }
+  .campo{display:flex;flex-direction:column;gap:6px;font-size:12.5px;font-weight:500;color:var(--muted);min-width:0;cursor:default}
+  .campo.ancho{grid-column:1 / -1}
+  select,input[type=text],input[type=tel],input[type=email]{
+    width:100%;min-height:42px;background:var(--surface-2);color:var(--text);
+    border:1px solid var(--border);border-radius:10px;padding:8px 12px;font-size:14px;
+    transition:border-color .18s ease;
+  }
+  select{appearance:none;-webkit-appearance:none;padding-right:34px;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2393ABA8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 10px center}
+  select:hover:not(:disabled),input[type=text]:hover:not(:disabled),input[type=tel]:hover:not(:disabled),input[type=email]:hover:not(:disabled){border-color:var(--border-strong)}
+  select:focus-visible,input[type=text]:focus-visible,input[type=tel]:focus-visible,input[type=email]:focus-visible{border-color:var(--ring);outline-offset:0}
+  select:disabled,input:disabled{opacity:.45;cursor:not-allowed}
+  option{background:var(--surface-2);color:var(--text)}
+
+  /* ===== Atajos ===== */
+  .atajos{display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:13.5px;color:var(--muted);align-items:center}
+  .atajos .k{display:flex;gap:4px}
+  kbd{
+    font-family:var(--mono);font-size:11.5px;color:var(--text);background:var(--surface-2);
+    border:1px solid var(--border-strong);border-bottom-width:2px;border-radius:6px;padding:2px 7px;
+  }
+
+  /* ===== Lista de grabaciones ===== */
+  .lista{display:flex;flex-direction:column;gap:12px}
+  .item{
+    display:grid;grid-template-columns:240px minmax(0,1fr);gap:16px;align-items:center;
+    background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;
+    transition:border-color .18s ease;
+  }
+  .item:hover{border-color:var(--border-strong)}
+  @media (max-width:640px){ .item{grid-template-columns:minmax(0,1fr)} }
+  .item video,.item audio{width:100%;border-radius:10px;background:#04090A;display:block}
+  .item .info{display:flex;flex-direction:column;gap:8px;min-width:0}
+  .item .nombre-archivo{font-weight:600;font-size:14.5px;word-break:break-all}
+  .item .meta{display:flex;flex-wrap:wrap;gap:6px}
+  .item .meta span{font-size:12px;font-family:var(--mono);color:var(--muted);background:var(--surface-3);border:1px solid var(--border);padding:2px 8px;border-radius:999px}
+  .item .botones{display:flex;gap:8px;flex-wrap:wrap}
+  a.botonDescarga,button.secundario{
+    min-height:40px;display:inline-flex;align-items:center;gap:7px;text-decoration:none;
+    border-radius:10px;padding:0 14px;font-size:13.5px;font-weight:600;border:1px solid transparent;
+    transition:background-color .18s ease,border-color .18s ease;
+  }
+  a.botonDescarga{background:var(--primary);color:var(--primary-ink)}
+  a.botonDescarga:hover{background:#2DD4BF}
+  button.secundario{background:transparent;color:var(--text);border-color:var(--border-strong)}
+  button.secundario:hover{background:var(--danger-soft);border-color:#5B2030;color:#FFC2CE}
+  a.botonDescarga svg.ic,button.secundario svg.ic{width:16px;height:16px}
+  .vacio{
+    display:flex;align-items:center;gap:12px;color:var(--muted);font-size:14px;
+    padding:18px;border:1px dashed var(--border-strong);border-radius:var(--radius);
+  }
+  .vacio svg.ic{color:var(--border-strong);width:22px;height:22px}
+
+  .pie{max-width:1280px;margin:0 auto;padding:4px 20px 32px;font-size:13px;color:var(--muted);line-height:1.6}
+  .pie code{font-family:var(--mono);font-size:12px;background:var(--surface-2);padding:1px 6px;border-radius:5px}
+  .fuente-oculta{position:fixed;left:-9999px;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
+
+  /* ===== Videollamada en vivo + chat lateral (añadido; solo clases nuevas) ===== */
+  .vc-unirse{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px}
+  @media (max-width:420px){ .vc-unirse{grid-template-columns:minmax(0,1fr)} }
+  .vc-acciones{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px}
+  @media (max-width:560px){ .vc-acciones .btn{flex:1 1 auto} }
+  .vc-acciones .btn.apagado{background:var(--danger-soft);border-color:#5B2030;color:#FFC2CE}
+  .vc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+  .vc-grid .vacio{grid-column:1 / -1}
+  .vc-tile{position:relative;aspect-ratio:16/9;border-radius:var(--radius);overflow:hidden;background:#04090A;border:1px solid var(--border)}
+  .vc-tile video{width:100%;height:100%;object-fit:cover;display:block;opacity:0}
+  .vc-tile.con-video video{opacity:1}
+  .vc-tile.espejo video{transform:scaleX(-1)}
+  .vc-avatar{position:absolute;inset:0;display:grid;place-items:center}
+  .vc-avatar span{
+    width:56px;height:56px;border-radius:50%;display:grid;place-items:center;
+    background:var(--primary-soft);color:var(--primary);border:1px solid var(--border-strong);
+    font-weight:700;font-size:22px;
+  }
+  .vc-tile.con-video .vc-avatar{display:none}
+  .vc-nombre{
+    position:absolute;left:10px;bottom:10px;max-width:calc(100% - 20px);
+    display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;
+    font-size:12px;font-weight:600;background:rgba(4,9,10,.72);color:var(--text);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .vc-nombre svg.ic{width:13px;height:13px;color:var(--danger);display:none}
+  .vc-tile.mudo .vc-nombre svg.ic{display:block}
+  .vc-tile.yo .vc-nombre{color:var(--primary)}
+  .vc-tile.habla{border-color:var(--primary)}
+  .vc-estado{margin-top:12px;font-size:13.5px;color:var(--muted);min-height:20px}
+  .vc-estado.ok{color:var(--primary)}
+  .vc-estado.error{color:#FF8DA1}
+  .vc-compartir{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:14px}
+  .vc-compartir .vc-acciones{margin-bottom:0}
+  .vc-codigo{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+  .vc-codigo span{font-size:12.5px;color:var(--muted)}
+  .vc-codigo strong{font-family:var(--mono);font-size:24px;letter-spacing:4px;color:var(--primary)}
+  .vc-codigo small{flex-basis:100%;font-size:12px;color:var(--muted);word-break:break-all}
+  .btn-wa{background:#25D366;color:#052E16}
+  .btn-wa:hover:not(:disabled){background:#3BE07A}
+  .vc-sonido{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:50;box-shadow:0 8px 30px rgba(0,0,0,.45)}
+
+  .vc-chat{display:flex;flex-direction:column;height:560px}
+  @media (max-width:1039px){ .vc-chat{height:460px} }
+  .chat-mensajes{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:2px 2px 12px}
+  .chat-msg{
+    max-width:85%;align-self:flex-start;background:var(--surface-2);border:1px solid var(--border);
+    border-radius:14px 14px 14px 4px;padding:8px 12px;font-size:14px;overflow-wrap:anywhere;
+  }
+  .chat-msg.mio{align-self:flex-end;background:var(--primary-soft);border-color:var(--border-strong);border-radius:14px 14px 4px 14px}
+  .chat-msg .autor{display:flex;align-items:baseline;gap:8px;font-size:11.5px;font-weight:600;color:var(--primary);margin-bottom:2px}
+  .chat-msg .autor time{font-family:var(--mono);font-weight:500;color:var(--muted)}
+  .chat-msg .texto{white-space:pre-wrap}
+  .chat-sistema{align-self:center;text-align:center;font-size:12px;color:var(--muted);padding:2px 10px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border)}
+  .chat-form{display:flex;gap:8px;padding-top:12px;border-top:1px solid var(--border)}
+  .chat-form input[type=text]{flex:1;min-width:0}
+  .chat-form .btn{padding:0 14px}
+
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+  }
+</style>
+</head>
+<body>
+
+<!-- Íconos SVG (estilo Lucide) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="m16 13 5.2 3.5a.5.5 0 0 0 .8-.4V7.9a.5.5 0 0 0-.8-.4L16 11"/><rect x="2" y="6" width="14" height="12" rx="2"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5M2 12l10 5 10-5"/></symbol>
+  <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M7 15h10"/></symbol>
+  <symbol id="i-film" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-toggle" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="6"/><circle cx="16" cy="12" r="2"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-login" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></symbol>
+  <symbol id="i-phone-off" viewBox="0 0 24 24"><path d="M10.7 13.3a16 16 0 0 0 3.4 2.6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6A2 2 0 0 1 22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-3.3-2.7M5.2 13.4A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.5 2.1L8 9.8M22 2 2 22"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></symbol>
+  <symbol id="i-whatsapp" viewBox="0 0 24 24"><path d="M3 21l1.6-4.7A8.5 8.5 0 1 1 8 19.6z"/><path d="M9 9.5c.3 2.2 2.3 4.2 4.5 4.5l1.2-1.2 1.8.8-.3 1.6c-3.6.4-7.5-3.5-7.1-7.1l1.6-.3.8 1.8z"/></symbol>
+  <symbol id="i-mic-off" viewBox="0 0 24 24"><path d="M2 2l20 20M18.9 13.4A7 7 0 0 0 19 12v-2M5 10v2a7 7 0 0 0 12 5M15 9.3V5a3 3 0 0 0-5.7-1.3M9 9v3a3 3 0 0 0 5.1 2.1M12 19v3"/></symbol>
+</svg>
+
+<header class="nav">
+  <div class="nav-in">
+    <div class="logo"><span class="logo-mark"><i></i></span>Mi Grabador <span class="badge">v3</span></div>
+    <span class="nav-sub">Pantalla · Cámara · Voz — se guarda en tu computadora</span>
+    <span class="chip-estado" aria-hidden="true"><span class="led"></span><span class="t-listo">Listo</span><span class="t-rec">Grabando</span><span class="t-pausa">En pausa</span></span>
+  </div>
+</header>
+
+<main class="shell">
+  <div class="col">
+    <div id="aviso" class="aviso oculto" data-reveal>
+      <svg class="ic"><use href="#i-alert"/></svg>
+      <div>
+        <strong>La captura de pantalla está bloqueada.</strong> Abrir el archivo con doble clic (<code>file://</code>) no permite grabar.
+        Haz doble clic en <code>Iniciar_grabador.bat</code> o abre la versión en línea:
+        <a href="https://jhonnyvasquez240973-coder.github.io/tuusuario.github.io/" style="color:inherit">jhonnyvasquez240973-coder.github.io/tuusuario.github.io</a>
+      </div>
+    </div>
+
+    <section class="card stage" data-reveal aria-label="Vista previa y controles">
+      <div class="vista">
+        <canvas id="lienzo" class="oculto"></canvas>
+        <div id="soloAudio" class="solo-audio oculto">
+          <div class="barras" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+          <strong>Solo audio</strong>Se grabará tu voz.
+        </div>
+        <div id="sinVideo" class="vacio-vista">
+          <div class="iconos" aria-hidden="true">
+            <span><svg class="ic"><use href="#i-monitor"/></svg></span>
+            <span><svg class="ic"><use href="#i-camera"/></svg></span>
+            <span><svg class="ic"><use href="#i-mic"/></svg></span>
+          </div>
+          <strong>Aquí verás la vista previa</strong>
+          <p>Activa Pantalla, Cámara o Voz en el panel de fuentes.</p>
+        </div>
+        <span class="rec-badge" aria-hidden="true"><i></i>REC</span>
+        <div id="cuenta" class="cuenta oculto">3</div>
+      </div>
+
+      <div class="dock">
+        <button id="btnIniciar" class="btn btn-cta" type="button"><span class="punto-rec"></span>Iniciar</button>
+        <button id="btnPausar" class="btn btn-sec" type="button" disabled>
+          <svg class="ic i-pause"><use href="#i-pause"/></svg><svg class="ic i-play"><use href="#i-play"/></svg>
+          <span id="lblPausar">Pausar</span>
+        </button>
+        <button id="btnDetener" class="btn btn-peligro" type="button" disabled><svg class="ic"><use href="#i-stop"/></svg>Detener y guardar</button>
+        <span class="cronometro" aria-label="Tiempo grabado"><span class="led"></span><span id="cronometro">00:00:00</span></span>
+      </div>
+      <div id="estado" class="estado" role="status" aria-live="polite">Elige una o varias fuentes y pulsa Iniciar.</div>
+    </section>
+
+    <section class="card" data-reveal>
+      <div class="card-h"><svg class="ic"><use href="#i-toggle"/></svg><h2>Opciones de grabación</h2></div>
+      <div class="opciones">
+        <label class="switch"><input id="autoDescarga" type="checkbox" checked> Descargar automáticamente al detener</label>
+        <label class="switch"><input id="conAudioSistema" type="checkbox" checked> Pedir también el audio del sistema</label>
+        <label class="switch"><input id="conCuenta" type="checkbox" checked> Cuenta regresiva de 3 s</label>
+        <label class="switch"><input id="espejo" type="checkbox" checked> Cámara en espejo</label>
+      </div>
+    </section>
+  </div>
+
+  <aside class="col">
+    <section class="card" data-reveal>
+      <div class="card-h"><svg class="ic"><use href="#i-layers"/></svg><h2>Fuentes</h2><span class="hint">Un clic para activar</span></div>
+      <div class="fuentes">
+        <button id="btnPantalla" class="fuente-boton" aria-pressed="false" type="button">
+          <span class="icono"><svg class="ic"><use href="#i-monitor"/></svg></span>
+          <span class="textos"><span class="nombre">Pantalla</span><span class="mini">Lo que se ve en el monitor</span></span>
+          <span class="tecla">Alt 1</span><span class="punto"></span>
+        </button>
+        <button id="btnCamara" class="fuente-boton" aria-pressed="false" type="button">
+          <span class="icono"><svg class="ic"><use href="#i-camera"/></svg></span>
+          <span class="textos"><span class="nombre">Cámara</span><span class="mini">Tu rostro en pequeño (PiP)</span></span>
+          <span class="tecla">Alt 2</span><span class="punto"></span>
+        </button>
+        <button id="btnVoz" class="fuente-boton" aria-pressed="false" type="button">
+          <span class="icono"><svg class="ic"><use href="#i-mic"/></svg></span>
+          <span class="textos"><span class="nombre">Voz</span><span class="mini">Tu micrófono</span></span>
+          <span class="tecla">Alt 3</span><span class="punto"></span>
+        </button>
+        <div class="medidor-fila"><svg class="ic"><use href="#i-mic"/></svg><div class="medidor" title="Nivel del micrófono"><span id="nivelMicro"></span></div></div>
+      </div>
+    </section>
+
+    <section class="card" data-reveal>
+      <div class="card-h"><svg class="ic"><use href="#i-sliders"/></svg><h2>Ajustes</h2></div>
+      <div class="ajustes">
+        <label class="campo">Cámara
+          <select id="selCamara"><option value="">Predeterminada</option></select>
+        </label>
+        <label class="campo">Micrófono
+          <select id="selMicro"><option value="">Predeterminado</option></select>
+        </label>
+        <label class="campo">Posición de la cámara
+          <select id="selPosicion">
+            <option value="ab-der" selected>Abajo derecha</option>
+            <option value="ab-izq">Abajo izquierda</option>
+            <option value="ar-der">Arriba derecha</option>
+            <option value="ar-izq">Arriba izquierda</option>
+          </select>
+        </label>
+        <label class="campo">Tamaño de la cámara
+          <select id="selTamano">
+            <option value="0.18">Pequeña</option>
+            <option value="0.26" selected>Mediana</option>
+            <option value="0.34">Grande</option>
+          </select>
+        </label>
+        <label class="campo">Forma
+          <select id="selForma">
+            <option value="redondeada" selected>Rectángulo redondeado</option>
+            <option value="circulo">Círculo</option>
+          </select>
+        </label>
+        <label class="campo">Calidad del video
+          <select id="selCalidad">
+            <option value="0">Original</option>
+            <option value="1080" selected>1080p · 8 Mbps</option>
+            <option value="720">720p · 4 Mbps</option>
+          </select>
+        </label>
+        <label class="campo ancho">Nombre del archivo
+          <input id="txtNombre" type="text" value="grabacion" maxlength="60" spellcheck="false">
+        </label>
+      </div>
+    </section>
+
+    <section class="card" data-reveal>
+      <div class="card-h"><svg class="ic"><use href="#i-keyboard"/></svg><h2>Atajos de teclado</h2></div>
+      <div class="atajos">
+        <span class="k"><kbd>Alt</kbd><kbd>R</kbd></span><span>Iniciar / detener</span>
+        <span class="k"><kbd>Alt</kbd><kbd>P</kbd></span><span>Pausar / reanudar</span>
+        <span class="k"><kbd>Alt</kbd><kbd>1</kbd></span><span>Pantalla</span>
+        <span class="k"><kbd>Alt</kbd><kbd>2</kbd></span><span>Cámara</span>
+        <span class="k"><kbd>Alt</kbd><kbd>3</kbd></span><span>Voz</span>
+      </div>
+    </section>
+  </aside>
+</main>
+
+<!-- ===== Videollamada en vivo + chat lateral (añadido) ===== -->
+<section class="shell" style="padding-top:0" aria-label="Videollamada y chat">
+  <div class="col">
+    <div class="card" data-scroll-reveal>
+      <div class="card-h"><svg class="ic"><use href="#i-users"/></svg><h2>Videollamada en vivo</h2><span id="vcHint" class="hint">Sin conectar</span></div>
+      <div class="vc-unirse">
+        <label class="campo">Tu nombre
+          <input id="vcNombre" type="text" maxlength="30" placeholder="Ej.: Ana" spellcheck="false" autocomplete="nickname">
+        </label>
+        <label class="campo">Código de sala
+          <input id="vcSala" type="text" maxlength="12" placeholder="Vacío = crear una nueva" spellcheck="false" autocomplete="off">
+        </label>
+      </div>
+      <div class="vc-acciones">
+        <button id="vcCrear" class="btn btn-cta" type="button"><svg class="ic"><use href="#i-plus"/></svg>Crear sala</button>
+        <button id="vcUnirse" class="btn btn-sec" type="button"><svg class="ic"><use href="#i-login"/></svg>Unirse</button>
+        <button id="vcMic" class="btn btn-sec oculto" type="button" aria-pressed="false"><svg class="ic"><use href="#i-mic"/></svg><span>Silenciar</span></button>
+        <button id="vcCam" class="btn btn-sec oculto" type="button" aria-pressed="false"><svg class="ic"><use href="#i-camera"/></svg><span>Apagar cámara</span></button>
+        <button id="vcInvitar" class="btn btn-sec oculto" type="button"><svg class="ic"><use href="#i-link"/></svg><span>Copiar invitación</span></button>
+        <button id="vcSalir" class="btn btn-peligro oculto" type="button"><svg class="ic"><use href="#i-phone-off"/></svg>Salir</button>
+      </div>
+      <div id="vcCompartir" class="vc-compartir oculto" aria-label="Invitar a otra persona">
+        <div class="vc-codigo">
+          <span>Código de sala</span><strong id="vcCodigoGrande">------</strong>
+          <small id="vcEnlaceTexto"></small>
+        </div>
+        <div class="vc-unirse">
+          <label class="campo">WhatsApp del invitado (opcional, con código de país)
+            <input id="vcTel" type="tel" maxlength="20" placeholder="Ej.: 51987654321" autocomplete="tel" inputmode="tel">
+          </label>
+          <label class="campo">Correo del invitado (opcional)
+            <input id="vcCorreo" type="email" maxlength="120" placeholder="invitado@correo.com" autocomplete="email" spellcheck="false">
+          </label>
+        </div>
+        <div class="vc-acciones">
+          <button id="vcWhatsapp" class="btn btn-wa" type="button"><svg class="ic"><use href="#i-whatsapp"/></svg>Enviar por WhatsApp</button>
+          <button id="vcEmail" class="btn btn-sec" type="button"><svg class="ic"><use href="#i-mail"/></svg>Enviar por correo</button>
+          <button id="vcNativo" class="btn btn-sec oculto" type="button"><svg class="ic"><use href="#i-share"/></svg>Compartir…</button>
+        </div>
+      </div>
+      <div id="vcGrid" class="vc-grid">
+        <div id="vcVacio" class="vacio"><svg class="ic"><use href="#i-users"/></svg>Crea una sala o únete con un código para ver y escuchar a otros participantes.</div>
+      </div>
+      <div id="vcEstado" class="vc-estado" role="status" aria-live="polite">Crea una sala y envía la invitación por WhatsApp o correo: tu invitado abre el enlace y se conecta solo.</div>
+    </div>
+  </div>
+
+  <aside class="col">
+    <div class="card vc-chat" data-scroll-reveal>
+      <div class="card-h"><svg class="ic"><use href="#i-chat"/></svg><h2>Chat</h2><span id="chatHint" class="hint">Sin conectar</span></div>
+      <div id="chatMensajes" class="chat-mensajes" role="log" aria-live="polite">
+        <div id="chatVacio" class="vacio"><svg class="ic"><use href="#i-chat"/></svg>Únete a una sala para chatear.</div>
+      </div>
+      <form id="chatForm" class="chat-form" autocomplete="off">
+        <input id="chatTexto" type="text" maxlength="1000" placeholder="Escribe un mensaje…" aria-label="Mensaje" disabled>
+        <button id="chatEnviar" class="btn btn-cta" type="submit" aria-label="Enviar" disabled><svg class="ic"><use href="#i-send"/></svg></button>
+      </form>
+    </div>
+  </aside>
+</section>
+
+<section class="shell" style="padding-top:0;grid-template-columns:minmax(0,1fr)">
+  <div class="card" data-scroll-reveal>
+    <div class="card-h"><svg class="ic"><use href="#i-film"/></svg><h2>Grabaciones de esta sesión</h2><span class="hint">Se pierden al recargar: descárgalas</span></div>
+    <div id="lista" class="lista"><div class="vacio"><svg class="ic"><use href="#i-film"/></svg>Todavía no hay grabaciones.</div></div>
+  </div>
+</section>
+
+<p class="pie" data-scroll-reveal>El archivo final se guarda en la carpeta de <strong>Descargas</strong> de tu equipo (o donde el navegador
+te pregunte), con nombre y fecha, en formato <code>.webm</code> (o <code>.mp4</code> en Safari).</p>
+
+<video id="fuentePantalla" class="fuente-oculta" autoplay muted playsinline></video>
+<video id="fuenteCamara"   class="fuente-oculta" autoplay muted playsinline></video>
+
+<script>
+(function () {
+  "use strict";
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  var btnPantalla     = $("btnPantalla");
+  var btnCamara       = $("btnCamara");
+  var btnVoz          = $("btnVoz");
+  var btnIniciar      = $("btnIniciar");
+  var btnPausar       = $("btnPausar");
+  var btnDetener      = $("btnDetener");
+  var autoDescarga    = $("autoDescarga");
+  var conAudioSistema = $("conAudioSistema");
+  var conCuenta       = $("conCuenta");
+  var espejo          = $("espejo");
+  var selCamara       = $("selCamara");
+  var selMicro        = $("selMicro");
+  var selPosicion     = $("selPosicion");
+  var selTamano       = $("selTamano");
+  var selForma        = $("selForma");
+  var selCalidad      = $("selCalidad");
+  var txtNombre       = $("txtNombre");
+  var estado          = $("estado");
+  var aviso           = $("aviso");
+  var cronometro      = $("cronometro");
+  var nivelMicro      = $("nivelMicro");
+  var lienzo          = $("lienzo");
+  var sinVideo        = $("sinVideo");
+  var soloAudio       = $("soloAudio");
+  var cuenta          = $("cuenta");
+  var lista           = $("lista");
+  var fuentePantalla  = $("fuentePantalla");
+  var fuenteCamara    = $("fuenteCamara");
+  var lblPausar       = $("lblPausar");
+  var ctx             = lienzo.getContext("2d");
+
+  /* ---------- animaciones (Motion / framer-motion) ---------- */
+  var M = window.Motion || null;
+  var sinMovimiento = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  var hayMotion = !!(M && M.animate && !sinMovimiento);
+  var SUAVE = [0.22, 1, 0.36, 1];
+
+  function mover(el, frames, opciones) {
+    if (!hayMotion || !el) { return; }
+    try { M.animate(el, frames, opciones); } catch (e) {}
+  }
+
+  function interacciones(raiz) {
+    if (!hayMotion || !M.press) { return; }
+    try {
+      M.press(raiz.querySelectorAll(".btn, .fuente-boton, a.botonDescarga, button.secundario"), function (el) {
+        if (el.disabled) { return; }
+        M.animate(el, { scale: 0.96 }, { type: "spring", stiffness: 600, damping: 30 });
+        return function () { M.animate(el, { scale: 1 }, { type: "spring", stiffness: 500, damping: 18 }); };
+      });
+    } catch (e) {}
+  }
+
+  var FPS = 30;
+  var TITULO = document.title;
+
+  var sPantalla = null, sCamara = null, sMicro = null;
+  var flujo = null, grabador = null, trozos = [];
+  var audioCtx = null, destinoAudio = null;
+  var medidorCtx = null, analizador = null, medidorAnim = null;
+  var tic = null;                 // Worker que marca el ritmo de dibujo
+  var preparando = false;         // true durante la cuenta regresiva
+  var activos = { pantalla: false, camara: false, voz: false };
+  var extension = "webm";
+  var grabaciones = [];
+  var duracionFinal = 0;
+
+  var acumulado = 0, arranque = 0, reloj = null;
+
+  /* ---------- utilidades ---------- */
+
+  function ponerEstado(msg, clase) {
+    estado.textContent = msg;
+    estado.className = "estado" + (clase ? " " + clase : "");
+    mover(estado, { opacity: [0.35, 1], y: [4, 0] }, { duration: 0.25, ease: SUAVE });
+  }
+
+  function marcar(boton, encendido) {
+    boton.classList.toggle("activo", encendido);
+    boton.setAttribute("aria-pressed", encendido ? "true" : "false");
+    if (encendido) {
+      mover(boton.querySelector(".icono"), { scale: [0.7, 1], rotate: [-8, 0] }, { type: "spring", stiffness: 520, damping: 16 });
+    }
+  }
+
+  function detenerPistas(s) {
+    if (!s) { return; }
+    s.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
+  }
+
+  function clonar(t) {
+    try { return t.clone(); } catch (e) { return t; }
+  }
+
+  function reproducir(video) {
+    var p = video.play();
+    if (p && p.catch) { p.catch(function () {}); }
+  }
+
+  function dosDigitos(n) { return (n < 10 ? "0" : "") + n; }
+
+  function marcaTiempo() {
+    var d = new Date();
+    return d.getFullYear() + "-" + dosDigitos(d.getMonth() + 1) + "-" + dosDigitos(d.getDate()) +
+           "_" + dosDigitos(d.getHours()) + "-" + dosDigitos(d.getMinutes()) + "-" + dosDigitos(d.getSeconds());
+  }
+
+  function peso(bytes) {
+    if (bytes > 1048576) { return (bytes / 1048576).toFixed(2) + " MB"; }
+    return (bytes / 1024).toFixed(0) + " KB";
+  }
+
+  function textoReloj(ms) {
+    var s = Math.floor(ms / 1000);
+    return dosDigitos(Math.floor(s / 3600)) + ":" +
+           dosDigitos(Math.floor((s % 3600) / 60)) + ":" + dosDigitos(s % 60);
+  }
+
+  function mostrarReloj(ms) {
+    cronometro.textContent = textoReloj(ms);
+    if (grabador && grabador.state === "recording") {
+      document.title = "● REC " + textoReloj(ms) + " — " + TITULO;
+    }
+  }
+
+  function arrancarReloj(desdeCero) {
+    if (desdeCero) { acumulado = 0; }
+    arranque = performance.now();
+    if (reloj) { clearInterval(reloj); }
+    reloj = setInterval(function () { mostrarReloj(acumulado + (performance.now() - arranque)); }, 200);
+    mostrarReloj(acumulado);
+  }
+
+  function congelarReloj() {
+    if (reloj) { clearInterval(reloj); reloj = null; acumulado += performance.now() - arranque; }
+    mostrarReloj(acumulado);
+  }
+
+  function reiniciarReloj() {
+    if (reloj) { clearInterval(reloj); reloj = null; }
+    acumulado = 0;
+    mostrarReloj(0);
+  }
+
+  function nombreLimpio() {
+    var n = (txtNombre.value || "").trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "_");
+    return n || "grabacion";
+  }
+
+  /* ---------- aviso de contexto seguro ---------- */
+
+  if (!window.isSecureContext || location.protocol === "file:") {
+    aviso.classList.remove("oculto");
+  }
+
+  /* ---------- lista de dispositivos ---------- */
+
+  function llenarSelect(select, dispositivos, textoDefecto) {
+    var elegido = select.value;
+    select.innerHTML = "";
+    var o = document.createElement("option");
+    o.value = ""; o.textContent = textoDefecto;
+    select.appendChild(o);
+    dispositivos.forEach(function (d, i) {
+      if (!d.deviceId || d.deviceId === "default" || d.deviceId === "communications") { return; }
+      var op = document.createElement("option");
+      op.value = d.deviceId;
+      op.textContent = d.label || (textoDefecto.replace("Predeterminad", "Dispositivo ") + (i + 1));
+      select.appendChild(op);
+    });
+    select.value = elegido;
+    if (select.value !== elegido) { select.value = ""; }
+  }
+
+  function cargarDispositivos() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) { return; }
+    navigator.mediaDevices.enumerateDevices().then(function (lista) {
+      llenarSelect(selCamara, lista.filter(function (d) { return d.kind === "videoinput"; }), "Predeterminada");
+      llenarSelect(selMicro,  lista.filter(function (d) { return d.kind === "audioinput"; }), "Predeterminado");
+    }).catch(function () {});
+  }
+
+  /* ---------- ritmo de dibujo (no se congela en segundo plano) ---------- */
+  /* requestAnimationFrame se detiene cuando la pestaña está oculta; un Worker
+     sigue enviando tics, así la grabación de pantalla no se congela. */
+
+  function iniciarTic() {
+    if (tic) { return; }
+    try {
+      var codigo = "var t=null;onmessage=function(e){clearInterval(t);if(e.data>0){t=setInterval(function(){postMessage(0)},e.data)}}";
+      tic = new Worker(URL.createObjectURL(new Blob([codigo], { type: "text/javascript" })));
+      tic.onmessage = pintarLienzo;
+      tic.postMessage(Math.round(1000 / FPS));
+    } catch (e) {
+      tic = { intervalo: setInterval(pintarLienzo, Math.round(1000 / FPS)), terminate: function () { clearInterval(this.intervalo); } };
+    }
+  }
+
+  function detenerTic() {
+    if (!tic) { return; }
+    try { if (tic.postMessage) { tic.postMessage(0); } tic.terminate(); } catch (e) {}
+    tic = null;
+  }
+
+  /* ---------- lienzo compuesto (pantalla + cámara PiP) ---------- */
+
+  function rutaRedonda(c, x, y, w, h, r) {
+    if (typeof c.roundRect === "function") { c.roundRect(x, y, w, h, r); return; }
+    c.moveTo(x + r, y);
+    c.lineTo(x + w - r, y);
+    c.quadraticCurveTo(x + w, y, x + w, y + r);
+    c.lineTo(x + w, y + h - r);
+    c.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    c.lineTo(x + r, y + h);
+    c.quadraticCurveTo(x, y + h, x, y + h - r);
+    c.lineTo(x, y + r);
+    c.quadraticCurveTo(x, y, x + r, y);
+  }
+
+  function tamanoBase() {
+    var st = null;
+    if (sPantalla && sPantalla.getVideoTracks().length) {
+      st = sPantalla.getVideoTracks()[0].getSettings();
+    } else if (sCamara && sCamara.getVideoTracks().length) {
+      st = sCamara.getVideoTracks()[0].getSettings();
+    }
+    var w = (st && st.width) || 1280, h = (st && st.height) || 720;
+    var tope = parseInt(selCalidad.value, 10) || 0;
+    if (tope && h > tope) { w = Math.round(w * tope / h); h = tope; }
+    return { w: w - (w % 2), h: h - (h % 2) };
+  }
+
+  function ajustarLienzo() {
+    var t = tamanoBase();
+    if (lienzo.width !== t.w || lienzo.height !== t.h) {
+      lienzo.width = t.w;
+      lienzo.height = t.h;
+    }
+  }
+
+  function dibujarCamara(x, y, w, h) {
+    // Recorta la cámara al centro para que llene el marco sin deformarse.
+    var vw = fuenteCamara.videoWidth, vh = fuenteCamara.videoHeight;
+    var escala = Math.max(w / vw, h / vh);
+    var sw = w / escala, sh = h / escala;
+    var sx = (vw - sw) / 2, sy = (vh - sh) / 2;
+    ctx.save();
+    if (espejo.checked) {
+      ctx.translate(x + w, y);
+      ctx.scale(-1, 1);
+      ctx.drawImage(fuenteCamara, sx, sy, sw, sh, 0, 0, w, h);
+    } else {
+      ctx.drawImage(fuenteCamara, sx, sy, sw, sh, x, y, w, h);
+    }
+    ctx.restore();
+  }
+
+  function pintarLienzo() {
+    if (!activos.pantalla && !activos.camara) { return; }
+    // Si la resolución de la pantalla compartida cambia (p. ej. otra ventana), se adapta;
+    // durante la grabación se mantiene fija para no romper el archivo.
+    if (!grabador) { ajustarLienzo(); }
+    var w = lienzo.width, h = lienzo.height;
+    ctx.fillStyle = "#05060f";
+    ctx.fillRect(0, 0, w, h);
+
+    var camLista = activos.camara && fuenteCamara.readyState >= 2 && fuenteCamara.videoWidth;
+
+    if (activos.pantalla) {
+      if (fuentePantalla.readyState >= 2 && fuentePantalla.videoWidth) {
+        // Ajuste "contain" para no deformar si la proporción cambia.
+        var e = Math.min(w / fuentePantalla.videoWidth, h / fuentePantalla.videoHeight);
+        var dw = fuentePantalla.videoWidth * e, dh = fuentePantalla.videoHeight * e;
+        ctx.drawImage(fuentePantalla, (w - dw) / 2, (h - dh) / 2, dw, dh);
+      }
+    } else if (camLista) {
+      dibujarCamara(0, 0, w, h);   // solo cámara: pantalla completa
+      return;
+    }
+
+    if (!camLista) { return; }
+
+    var circulo  = selForma.value === "circulo";
+    var anchoCam = Math.round(w * parseFloat(selTamano.value));
+    var altoCam  = circulo ? anchoCam : Math.round(anchoCam * 9 / 16);
+    var margen   = Math.round(w * 0.02);
+    var pos      = selPosicion.value;
+    var x = pos.indexOf("izq") !== -1 ? margen : w - anchoCam - margen;
+    var y = pos.indexOf("ar") === 0   ? margen : h - altoCam - margen;
+    var r = circulo ? anchoCam / 2 : Math.round(anchoCam * 0.07);
+
+    ctx.save();
+    ctx.beginPath();
+    rutaRedonda(ctx, x, y, anchoCam, altoCam, r);
+    ctx.closePath();
+    ctx.clip();
+    dibujarCamara(x, y, anchoCam, altoCam);
+    ctx.restore();
+
+    ctx.save();
+    ctx.beginPath();
+    rutaRedonda(ctx, x, y, anchoCam, altoCam, r);
+    ctx.strokeStyle = "rgba(255,255,255,.85)";
+    ctx.lineWidth = Math.max(2, Math.round(w * 0.0025));
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function refrescarVista() {
+    var hayVideo = activos.pantalla || activos.camara;
+    lienzo.classList.toggle("oculto", !hayVideo);
+    soloAudio.classList.toggle("oculto", hayVideo || !activos.voz);
+    sinVideo.classList.toggle("oculto", hayVideo || activos.voz);
+    if (hayVideo) {
+      ajustarLienzo();
+      iniciarTic();
+    } else if (!grabador) {
+      detenerTic();
+    }
+  }
+
+  /* ---------- fuentes ---------- */
+
+  function encenderPantalla() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+      ponerEstado("Tu navegador no permite capturar la pantalla. Usa Chrome, Edge o Firefox actualizados.", "error");
+      return;
+    }
+    var peticion = {
+      video: { frameRate: { ideal: 30, max: 60 } },
+      audio: !!conAudioSistema.checked
+    };
+    navigator.mediaDevices.getDisplayMedia(peticion).then(function (s) {
+      sPantalla = s;
+      activos.pantalla = true;
+      marcar(btnPantalla, true);
+      fuentePantalla.srcObject = s;
+      reproducir(fuentePantalla);
+      if (s.getVideoTracks().length) {
+        s.getVideoTracks()[0].addEventListener("ended", function () {
+          if (!activos.pantalla) { return; }
+          var grabando = grabador && grabador.state !== "inactive";
+          apagarPantalla();
+          if (grabando) {
+            detenerGrabacion();
+            ponerEstado("Dejaste de compartir la pantalla: la grabación se detuvo y se guardó.");
+          } else {
+            ponerEstado("Compartición de pantalla finalizada.");
+          }
+        });
+      }
+      if (s.getAudioTracks().length) {
+        ponerEstado("Pantalla activa, con audio del sistema.");
+      } else {
+        ponerEstado("Pantalla activa (sin audio del sistema: solo Chromium lo entrega).");
+      }
+      refrescarVista();
+    }).catch(function (e) {
+      ponerEstado("No se pudo capturar la pantalla: " + e.message, "error");
+    });
+  }
+
+  function apagarPantalla() {
+    activos.pantalla = false;
+    marcar(btnPantalla, false);
+    fuentePantalla.srcObject = null;
+    detenerPistas(sPantalla);
+    sPantalla = null;
+    refrescarVista();
+  }
+
+  function encenderCamara() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      ponerEstado("Tu navegador no permite usar la cámara.", "error");
+      return;
+    }
+    var video = { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } };
+    if (selCamara.value) { video.deviceId = { exact: selCamara.value }; }
+    navigator.mediaDevices.getUserMedia({ video: video }).then(function (s) {
+      sCamara = s;
+      activos.camara = true;
+      marcar(btnCamara, true);
+      fuenteCamara.srcObject = s;
+      reproducir(fuenteCamara);
+      ponerEstado("Cámara activa.");
+      refrescarVista();
+      cargarDispositivos();   // tras el permiso ya hay nombres de dispositivos
+    }).catch(function (e) {
+      ponerEstado("No se pudo abrir la cámara: " + e.message, "error");
+    });
+  }
+
+  function apagarCamara() {
+    activos.camara = false;
+    marcar(btnCamara, false);
+    fuenteCamara.srcObject = null;
+    detenerPistas(sCamara);
+    sCamara = null;
+    refrescarVista();
+  }
+
+  function encenderVoz() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      ponerEstado("Tu navegador no permite usar el micrófono.", "error");
+      return;
+    }
+    var audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+    if (selMicro.value) { audio.deviceId = { exact: selMicro.value }; }
+    navigator.mediaDevices.getUserMedia({ audio: audio }).then(function (s) {
+      sMicro = s;
+      activos.voz = true;
+      marcar(btnVoz, true);
+      ponerEstado("Micrófono activo.");
+      iniciarMedidor(s);
+      refrescarVista();
+      cargarDispositivos();
+    }).catch(function (e) {
+      ponerEstado("No se pudo abrir el micrófono: " + e.message, "error");
+    });
+  }
+
+  function apagarVoz() {
+    activos.voz = false;
+    marcar(btnVoz, false);
+    detenerMedidor();
+    detenerPistas(sMicro);
+    sMicro = null;
+    refrescarVista();
+  }
+
+  /* ---------- medidor de nivel del micrófono ---------- */
+
+  function iniciarMedidor(s) {
+    detenerMedidor();
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      medidorCtx = new Ctx();
+      analizador = medidorCtx.createAnalyser();
+      analizador.fftSize = 512;
+      medidorCtx.createMediaStreamSource(s).connect(analizador);
+      var datos = new Uint8Array(analizador.fftSize);
+      var paso = function () {
+        if (!analizador) { return; }
+        analizador.getByteTimeDomainData(datos);
+        var pico = 0;
+        for (var i = 0; i < datos.length; i++) {
+          var v = Math.abs(datos[i] - 128) / 128;
+          if (v > pico) { pico = v; }
+        }
+        nivelMicro.style.width = Math.min(100, Math.round(pico * 140)) + "%";
+        medidorAnim = requestAnimationFrame(paso);
+      };
+      paso();
+    } catch (e) {}
+  }
+
+  function detenerMedidor() {
+    if (medidorAnim) { cancelAnimationFrame(medidorAnim); medidorAnim = null; }
+    analizador = null;
+    if (medidorCtx) { try { medidorCtx.close(); } catch (e) {} medidorCtx = null; }
+    nivelMicro.style.width = "0%";
+  }
+
+  /* ---------- mezcla de audio ---------- */
+
+  function mezclarAudios(pistas) {
+    if (!pistas.length) { return []; }
+    if (pistas.length === 1) { return pistas; }
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!audioCtx) { audioCtx = new Ctx(); }
+      if (audioCtx.state === "suspended" && audioCtx.resume) { audioCtx.resume(); }
+      destinoAudio = audioCtx.createMediaStreamDestination();
+      for (var i = 0; i < pistas.length; i++) {
+        var fuente = audioCtx.createMediaStreamSource(new MediaStream([pistas[i]]));
+        fuente.connect(destinoAudio);
+      }
+      return destinoAudio.stream.getAudioTracks();
+    } catch (e) {
+      ponerEstado("No se pudieron mezclar los audios; se usará solo la primera fuente.", "error");
+      return [pistas[0]];
+    }
+  }
+
+  /* ---------- construcción del flujo final ---------- */
+
+  function construirFlujo() {
+    var pistas = [];
+    var audios = [];
+
+    if (activos.voz && sMicro) {
+      sMicro.getAudioTracks().forEach(function (t) { audios.push(clonar(t)); });
+    }
+    if (activos.pantalla && sPantalla) {
+      sPantalla.getAudioTracks().forEach(function (t) { audios.push(clonar(t)); });
+    }
+
+    if (activos.pantalla || activos.camara) {
+      ajustarLienzo();
+      pintarLienzo();
+      if (typeof lienzo.captureStream === "function") {
+        lienzo.captureStream(FPS).getVideoTracks().forEach(function (t) { pistas.push(t); });
+      } else if (activos.pantalla && sPantalla) {
+        sPantalla.getVideoTracks().forEach(function (t) { pistas.push(clonar(t)); });
+      } else if (sCamara) {
+        sCamara.getVideoTracks().forEach(function (t) { pistas.push(clonar(t)); });
+      }
+    }
+
+    mezclarAudios(audios).forEach(function (t) { pistas.push(t); });
+
+    if (!pistas.length) { return null; }
+    return new MediaStream(pistas);
+  }
+
+  function elegirFormato(esVideo) {
+    if (!window.MediaRecorder) { return ""; }
+    var lista = esVideo
+      ? ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm;codecs=h264,opus", "video/webm", "video/mp4"]
+      : ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
+    for (var i = 0; i < lista.length; i++) {
+      if (MediaRecorder.isTypeSupported(lista[i])) { return lista[i]; }
+    }
+    return "";
+  }
+
+  function bitrateVideo() {
+    var tope = parseInt(selCalidad.value, 10) || 0;
+    if (tope === 720) { return 4000000; }
+    if (tope === 1080) { return 8000000; }
+    return lienzo.height > 1080 ? 14000000 : 8000000;
+  }
+
+  /* ---------- grabación ---------- */
+
+  function bloquearFuentes(bloqueado) {
+    [btnPantalla, btnCamara, btnVoz, conAudioSistema, selCamara, selMicro, selCalidad, txtNombre, conCuenta]
+      .forEach(function (el) { el.disabled = bloqueado; });
+  }
+
+  function mostrarCuenta(n) {
+    cuenta.innerHTML = "<span>" + n + "</span>";
+    mover(cuenta.firstChild, { scale: [1.5, 1], opacity: [0, 1] }, { type: "spring", stiffness: 300, damping: 20 });
+  }
+
+  function cuentaRegresiva(listo) {
+    if (!conCuenta.checked) { listo(); return; }
+    var n = 3;
+    preparando = true;
+    btnIniciar.disabled = true;
+    bloquearFuentes(true);
+    cuenta.classList.remove("oculto");
+    mostrarCuenta(n);
+    ponerEstado("Preparado…");
+    var t = setInterval(function () {
+      n--;
+      if (n > 0) { mostrarCuenta(n); return; }
+      clearInterval(t);
+      cuenta.classList.add("oculto");
+      preparando = false;
+      listo();
+    }, 1000);
+  }
+
+  function iniciarGrabacion() {
+    if (preparando || grabador) { return; }
+    if (!activos.pantalla && !activos.camara && !activos.voz) {
+      ponerEstado("Activa al menos una fuente: Pantalla, Cámara o Voz.", "error");
+      return;
+    }
+    if (!window.MediaRecorder) {
+      ponerEstado("Tu navegador no soporta MediaRecorder. Usa Chrome, Edge o Firefox actualizados.", "error");
+      return;
+    }
+    cuentaRegresiva(comenzar);
+  }
+
+  function comenzar() {
+    if (!activos.pantalla && !activos.camara && !activos.voz) {
+      bloquearFuentes(false);
+      btnIniciar.disabled = false;
+      ponerEstado("Las fuentes se apagaron antes de empezar.", "error");
+      return;
+    }
+
+    flujo = construirFlujo();
+    if (!flujo) {
+      bloquearFuentes(false);
+      btnIniciar.disabled = false;
+      ponerEstado("No hay pistas disponibles para grabar.", "error");
+      return;
+    }
+
+    var esVideo = flujo.getVideoTracks().length > 0;
+    if (esVideo) { iniciarTic(); }
+    var tipo = elegirFormato(esVideo);
+    extension = (tipo.indexOf("mp4") !== -1) ? (esVideo ? "mp4" : "m4a") : (tipo.indexOf("ogg") !== -1 ? "ogg" : "webm");
+
+    var opciones = {};
+    if (tipo) { opciones.mimeType = tipo; }
+    if (esVideo) { opciones.videoBitsPerSecond = bitrateVideo(); }
+    opciones.audioBitsPerSecond = 128000;
+
+    trozos = [];
+    try {
+      grabador = new MediaRecorder(flujo, opciones);
+    } catch (e) {
+      try { grabador = new MediaRecorder(flujo); } catch (e2) {
+        grabador = null;
+        bloquearFuentes(false);
+        btnIniciar.disabled = false;
+        ponerEstado("No se pudo iniciar el grabador: " + e2.message, "error");
+        return;
+      }
+    }
+
+    grabador.ondataavailable = function (ev) {
+      if (ev.data && ev.data.size) { trozos.push(ev.data); }
+    };
+    grabador.onstop = finalizarGrabacion;
+    grabador.onerror = function (ev) {
+      ponerEstado("Error del grabador: " + ((ev.error && ev.error.message) || "desconocido"), "error");
+    };
+    grabador.start(1000);
+
+    btnIniciar.disabled = true;
+    btnPausar.disabled = false;
+    btnDetener.disabled = false;
+    bloquearFuentes(true);
+    document.body.classList.add("rec");
+    arrancarReloj(true);
+    ponerEstado(esVideo ? "Grabando…" : "Grabando solo audio…", "grabando");
+  }
+
+  function alternarPausa() {
+    if (!grabador) { return; }
+    if (grabador.state === "recording") {
+      grabador.pause();
+      congelarReloj();
+      document.title = "❚❚ Pausa — " + TITULO;
+      document.body.classList.add("pausa");
+      lblPausar.textContent = "Reanudar";
+      ponerEstado("Grabación en pausa.");
+    } else if (grabador.state === "paused") {
+      grabador.resume();
+      document.body.classList.remove("pausa");
+      arrancarReloj(false);
+      lblPausar.textContent = "Pausar";
+      ponerEstado("Grabando…", "grabando");
+    }
+  }
+
+  function detenerGrabacion() {
+    if (grabador && grabador.state !== "inactive") { grabador.stop(); }
+  }
+
+  function finalizarGrabacion() {
+    var tipo = (grabador && grabador.mimeType) ? grabador.mimeType : ("video/" + extension);
+    var esVideo = tipo.indexOf("video") === 0;
+    var blob = new Blob(trozos, { type: tipo });
+    trozos = [];
+    congelarReloj();
+    duracionFinal = acumulado;
+    document.body.classList.remove("rec", "pausa");
+    document.title = TITULO;
+
+    var nombre = nombreLimpio() + "-" + marcaTiempo() + "." + extension;
+    var url = URL.createObjectURL(blob);
+    var registro = { nombre: nombre, url: url, bytes: blob.size, duracion: duracionFinal, esVideo: esVideo };
+    grabaciones.unshift(registro);
+    pintarLista(true);
+
+    if (autoDescarga.checked) { descargar(registro); }
+
+    limpiarGrabador();
+    ponerEstado("Listo: " + nombre + " · " + peso(blob.size) + ". Se guarda en la carpeta de Descargas de tu equipo.");
+  }
+
+  function limpiarGrabador() {
+    if (flujo) {
+      flujo.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
+      flujo = null;
+    }
+    if (destinoAudio) {
+      try { destinoAudio.disconnect(); } catch (e) {}
+      destinoAudio = null;
+    }
+    if (audioCtx && audioCtx.state !== "closed") {
+      try { audioCtx.close(); } catch (e) {}
+      audioCtx = null;
+    }
+    grabador = null;
+    btnIniciar.disabled = false;
+    btnPausar.disabled = true;
+    btnDetener.disabled = true;
+    lblPausar.textContent = "Pausar";
+    bloquearFuentes(false);
+    refrescarVista();
+  }
+
+  /* ---------- lista de grabaciones ---------- */
+
+  function descargar(reg) {
+    var a = document.createElement("a");
+    a.href = reg.url;
+    a.download = reg.nombre;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  function chip(texto) {
+    var c = document.createElement("span");
+    c.textContent = texto;
+    return c;
+  }
+
+  function icono(nombre) {
+    var ns = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("class", "ic");
+    svg.setAttribute("aria-hidden", "true");
+    var use = document.createElementNS(ns, "use");
+    use.setAttribute("href", "#" + nombre);
+    svg.appendChild(use);
+    return svg;
+  }
+
+  function pintarLista(nuevo) {
+    lista.innerHTML = "";
+    if (!grabaciones.length) {
+      var v = document.createElement("div");
+      v.className = "vacio";
+      v.appendChild(icono("i-film"));
+      v.appendChild(document.createTextNode("Todavía no hay grabaciones."));
+      lista.appendChild(v);
+      return;
+    }
+    grabaciones.forEach(function (reg, i) {
+      var item = document.createElement("div");
+      item.className = "item";
+
+      var medio = document.createElement(reg.esVideo ? "video" : "audio");
+      medio.src = reg.url;
+      medio.controls = true;
+      medio.preload = "metadata";
+      item.appendChild(medio);
+
+      var info = document.createElement("div");
+      info.className = "info";
+      var n = document.createElement("div");
+      n.className = "nombre-archivo";
+      n.textContent = reg.nombre;
+      var m = document.createElement("div");
+      m.className = "meta";
+      m.appendChild(chip(textoReloj(reg.duracion)));
+      m.appendChild(chip(peso(reg.bytes)));
+      m.appendChild(chip(reg.esVideo ? "video" : "solo audio"));
+      var botones = document.createElement("div");
+      botones.className = "botones";
+
+      var a = document.createElement("a");
+      a.href = reg.url;
+      a.download = reg.nombre;
+      a.className = "botonDescarga";
+      a.appendChild(icono("i-download"));
+      a.appendChild(document.createTextNode("Descargar"));
+
+      var borrar = document.createElement("button");
+      borrar.type = "button";
+      borrar.className = "secundario";
+      borrar.appendChild(icono("i-trash"));
+      borrar.appendChild(document.createTextNode("Quitar"));
+      borrar.addEventListener("click", function () {
+        var quitar = function () {
+          URL.revokeObjectURL(reg.url);
+          grabaciones.splice(i, 1);
+          pintarLista();
+        };
+        if (hayMotion) {
+          mover(item, { opacity: 0, x: 24 }, { duration: 0.18, ease: "easeIn" });
+          setTimeout(quitar, 190);
+        } else {
+          quitar();
+        }
+      });
+
+      botones.appendChild(a);
+      botones.appendChild(borrar);
+      info.appendChild(n);
+      info.appendChild(m);
+      info.appendChild(botones);
+      item.appendChild(info);
+      lista.appendChild(item);
+    });
+    interacciones(lista);
+    if (nuevo) {
+      mover(lista.firstChild, { opacity: [0, 1], y: [-14, 0], scale: [0.98, 1] }, { type: "spring", stiffness: 380, damping: 28 });
+    }
+  }
+
+  /* ---------- eventos ---------- */
+
+  btnPantalla.addEventListener("click", function () {
+    if (activos.pantalla) { apagarPantalla(); } else { encenderPantalla(); }
+  });
+
+  btnCamara.addEventListener("click", function () {
+    if (activos.camara) { apagarCamara(); } else { encenderCamara(); }
+  });
+
+  btnVoz.addEventListener("click", function () {
+    if (activos.voz) { apagarVoz(); ponerEstado("Micrófono desactivado."); } else { encenderVoz(); }
+  });
+
+  // Cambiar de dispositivo con la fuente encendida la reabre con el nuevo.
+  selCamara.addEventListener("change", function () {
+    if (activos.camara) { apagarCamara(); encenderCamara(); }
+  });
+  selMicro.addEventListener("change", function () {
+    if (activos.voz) { apagarVoz(); encenderVoz(); }
+  });
+  selCalidad.addEventListener("change", function () { if (!grabador) { ajustarLienzo(); } });
+
+  btnIniciar.addEventListener("click", iniciarGrabacion);
+  btnPausar.addEventListener("click", alternarPausa);
+  btnDetener.addEventListener("click", detenerGrabacion);
+
+  document.addEventListener("keydown", function (ev) {
+    if (!ev.altKey || ev.ctrlKey || ev.metaKey) { return; }
+    var k = (ev.key || "").toLowerCase();
+    if (k === "r" || ev.code === "KeyR") {
+      ev.preventDefault();
+      if (grabador) { detenerGrabacion(); } else { iniciarGrabacion(); }
+    } else if (k === "p" || ev.code === "KeyP") {
+      ev.preventDefault();
+      alternarPausa();
+    } else if (!grabador && !preparando) {
+      if (ev.code === "Digit1") { ev.preventDefault(); btnPantalla.click(); }
+      if (ev.code === "Digit2") { ev.preventDefault(); btnCamara.click(); }
+      if (ev.code === "Digit3") { ev.preventDefault(); btnVoz.click(); }
+    }
+  });
+
+  if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+    navigator.mediaDevices.addEventListener("devicechange", cargarDispositivos);
+  }
+
+  window.addEventListener("beforeunload", function (ev) {
+    if (grabador && grabador.state !== "inactive") {
+      ev.preventDefault();
+      ev.returnValue = "";
+      try { grabador.stop(); } catch (e) {}
+    }
+  });
+
+  // Gancho para pruebas automáticas y agentes de IA (solo lectura del estado).
+  window.__grabador = {
+    estado: function () {
+      return {
+        activos: { pantalla: activos.pantalla, camara: activos.camara, voz: activos.voz },
+        grabando: grabador ? grabador.state : "inactive",
+        grabaciones: grabaciones.map(function (g) { return { nombre: g.nombre, bytes: g.bytes, duracion: g.duracion, esVideo: g.esVideo }; }),
+        lienzo: { w: lienzo.width, h: lienzo.height }
+      };
+    }
+  };
+
+  /* ---------- entrada animada, aparición al bajar y hover ---------- */
+  if (hayMotion) {
+    try {
+      var alBajar = document.querySelectorAll("[data-scroll-reveal]");
+      for (var j = 0; j < alBajar.length; j++) { alBajar[j].style.opacity = "0"; }
+      M.animate("[data-reveal]", { opacity: [0, 1], y: [16, 0] },
+        { duration: 0.5, delay: M.stagger ? M.stagger(0.07) : 0, ease: SUAVE });
+      M.inView("[data-scroll-reveal]", function (el) {
+        M.animate(el, { opacity: [0, 1], y: [24, 0] }, { duration: 0.55, ease: SUAVE });
+      }, { amount: 0.15 });
+      if (M.hover) {
+        M.hover(".fuente-boton", function (el) {
+          if (el.disabled) { return; }
+          M.animate(el, { y: -2 }, { type: "spring", stiffness: 420, damping: 26 });
+          return function () { M.animate(el, { y: 0 }, { type: "spring", stiffness: 420, damping: 26 }); };
+        });
+      }
+      interacciones(document);
+    } catch (e) {
+      var todos = document.querySelectorAll("[data-scroll-reveal]");
+      for (var q = 0; q < todos.length; q++) { todos[q].style.opacity = ""; }
+    }
+  }
+
+  cargarDispositivos();
+  reiniciarReloj();
+  refrescarVista();
+})();
+</script>
+
+<script>
+/* =====================================================================
+   Videollamada en vivo + chat (añadido)
+   - Video/voz: WebRTC entre navegadores (malla: cada uno se conecta con todos).
+   - Chat: canales de datos WebRTC de las mismas conexiones (sin servidor de chat).
+   - Señalización: servidor público gratuito de PeerJS. Para usar uno propio:
+       window.LLAMADA_CONFIG = { host: "mi-servidor", port: 443, path: "/", secure: true };
+     antes de este script.
+   ===================================================================== */
+(function () {
+  "use strict";
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  var vcNombre   = $("vcNombre");
+  var vcSala     = $("vcSala");
+  var vcCrear    = $("vcCrear");
+  var vcUnirse   = $("vcUnirse");
+  var vcMic      = $("vcMic");
+  var vcCam      = $("vcCam");
+  var vcInvitar  = $("vcInvitar");
+  var vcSalir    = $("vcSalir");
+  var vcGrid     = $("vcGrid");
+  var vcVacio    = $("vcVacio");
+  var vcEstado   = $("vcEstado");
+  var vcHint     = $("vcHint");
+  var chatMensajes = $("chatMensajes");
+  var chatVacio  = $("chatVacio");
+  var chatForm   = $("chatForm");
+  var chatTexto  = $("chatTexto");
+  var chatEnviar = $("chatEnviar");
+  var chatHint   = $("chatHint");
+  var espejo     = $("espejo");
+  var selCamara  = $("selCamara");
+  var selMicro   = $("selMicro");
+  var vcCompartir = $("vcCompartir");
+  var vcCodigoGrande = $("vcCodigoGrande");
+  var vcEnlaceTexto = $("vcEnlaceTexto");
+  var vcTel      = $("vcTel");
+  var vcCorreo   = $("vcCorreo");
+  var vcWhatsapp = $("vcWhatsapp");
+  var vcEmail    = $("vcEmail");
+  var vcNativo   = $("vcNativo");
+
+  // Dirección pública (GitHub Pages). Las invitaciones siempre apuntan aquí cuando
+  // la app se abre en local (localhost o file://), así el invitado no necesita ngrok.
+  var PAGINA_PUBLICA = String(window.LLAMADA_PUBLICA ||
+    "https://jhonnyvasquez240973-coder.github.io/tuusuario.github.io/");
+
+  var PREFIJO = "migrabador-v3-sala-";
+  // Servidores que ayudan a conectar dos redes distintas (casa, datos móviles, etc.).
+  // STUN: descubre la dirección pública. TURN: reenvía el video si la conexión directa está bloqueada.
+  var ICE_POR_DEFECTO = [
+    { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
+    { urls: "stun:stun.cloudflare.com:3478" },
+    { urls: ["turn:eu-0.turn.peerjs.com:3478", "turn:us-0.turn.peerjs.com:3478"], username: "peerjs", credential: "peerjsp" }
+  ];
+  var OPCIONES = {};
+  (function () {
+    var c = window.LLAMADA_CONFIG || {};
+    for (var k in c) { if (Object.prototype.hasOwnProperty.call(c, k)) { OPCIONES[k] = c[k]; } }
+    if (!OPCIONES.config) { OPCIONES.config = { iceServers: ICE_POR_DEFECTO }; }
+  })();
+  var MAX_INTENTOS = 30;          // el invitado espera hasta ~2 min a que el anfitrión abra la sala
+  var ESPERA_REINTENTO = 4000;    // ms entre intentos
+  var M = window.Motion || null;
+  var hayMotion = !!(M && M.animate && !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches));
+
+  var vc = {
+    peer: null,          // nuestra conexión PeerJS
+    sala: "",            // código de la sala
+    anfitrion: false,    // true si creamos la sala
+    conectado: false,
+    nombre: "",
+    local: null,         // MediaStream de cámara + micrófono
+    micOn: true,
+    camOn: true,
+    pares: {},           // id -> { id, nombre, datos, llamada, tile, video, etiqueta, inicial, saludado }
+    tileLocal: null,
+    espera: null,
+    reintento: null,     // temporizador del siguiente intento de unirse
+    intentos: 0
+  };
+
+  /* ---------- utilidades ---------- */
+
+  function mover(el, frames, opciones) {
+    if (!hayMotion || !el) { return; }
+    try { M.animate(el, frames, opciones); } catch (e) {}
+  }
+
+  function estado(msg, clase) {
+    vcEstado.textContent = msg;
+    vcEstado.className = "vc-estado" + (clase ? " " + clase : "");
+  }
+
+  function limpiarCodigo(v) {
+    return String(v || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12);
+  }
+
+  function limpiarNombre(v) {
+    return String(v || "").replace(/\s+/g, " ").trim().slice(0, 30);
+  }
+
+  function aleatorio(n, abc) {
+    abc = abc || "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    var s = "", r;
+    try { r = crypto.getRandomValues(new Uint32Array(n)); } catch (e) { r = null; }
+    for (var i = 0; i < n; i++) {
+      s += abc.charAt((r ? r[i] : Math.floor(Math.random() * 4294967295)) % abc.length);
+    }
+    return s;
+  }
+
+  function hora(ms) {
+    var d = new Date(ms);
+    return (d.getHours() < 10 ? "0" : "") + d.getHours() + ":" + (d.getMinutes() < 10 ? "0" : "") + d.getMinutes();
+  }
+
+  function icono(nombre) {
+    var ns = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("class", "ic");
+    svg.setAttribute("aria-hidden", "true");
+    var use = document.createElementNS(ns, "use");
+    use.setAttribute("href", "#" + nombre);
+    svg.appendChild(use);
+    return svg;
+  }
+
+  function guardarNombre(n) { try { localStorage.setItem("vcNombre", n); } catch (e) {} }
+  function leerNombre() { try { return localStorage.getItem("vcNombre") || ""; } catch (e) { return ""; } }
+
+  function sufijoSala(codigo) {
+    return "?sala=" + encodeURIComponent(codigo) + "#sala=" + encodeURIComponent(codigo);
+  }
+
+  function enlaceInvitacion() {
+    return location.origin + location.pathname + sufijoSala(vc.sala);
+  }
+
+  function limpiarUrl() {
+    try {
+      if (/[?&#]sala=/.test(location.search + location.hash)) { history.replaceState(null, "", location.pathname); }
+    } catch (e) {}
+  }
+
+  // Si abriste la app en localhost o con doble clic, ese enlace no sirve en otro
+  // dispositivo: la invitación usa la página pública de GitHub Pages.
+  function esLocal() {
+    var h = location.hostname;
+    return location.protocol === "file:" || h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h === "::1";
+  }
+
+  function enlaceInvitacionPublico() {
+    if (!esLocal()) { return enlaceInvitacion(); }
+    return PAGINA_PUBLICA + sufijoSala(vc.sala);
+  }
+
+  function textoInvitacion(saltos) {
+    var nl = saltos || "\n";
+    return "Hola, te invito a una videollamada con chat en Mi Grabador." + nl + nl +
+           "Abre este enlace y permite la cámara y el micrófono (te conectas solo):" + nl +
+           enlaceInvitacionPublico() + nl + nl +
+           "Código de sala: " + vc.sala + nl +
+           "(Si el enlace no entra solo, escribe el código en «Código de sala» y pulsa Unirse.)";
+  }
+
+  function abrirExterno(url) {
+    var w = null;
+    try { w = window.open(url, "_blank", "noopener"); } catch (e) {}
+    if (!w) { location.href = url; }
+  }
+
+  function enviarWhatsapp() {
+    if (!vc.conectado) { return; }
+    var tel = String(vcTel.value || "").replace(/\D/g, "");
+    if (tel && (tel.length < 8 || tel.length > 15)) {
+      estado("El número de WhatsApp no parece válido. Escríbelo con código de país (ej.: 51987654321), o déjalo vacío para elegir el contacto en WhatsApp.", "error");
+      vcTel.focus();
+      return;
+    }
+    guardarDato("vcTel", tel);
+    abrirExterno("https://wa.me/" + tel + "?text=" + encodeURIComponent(textoInvitacion()));
+    estado("Se abrió WhatsApp con la invitación a la sala " + vc.sala + ". Solo pulsa Enviar.", "ok");
+  }
+
+  function enviarCorreo() {
+    if (!vc.conectado) { return; }
+    var correo = String(vcCorreo.value || "").trim();
+    if (correo && !/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(correo)) {
+      estado("El correo no parece válido. Revísalo o déjalo vacío para escribirlo en tu programa de correo.", "error");
+      vcCorreo.focus();
+      return;
+    }
+    guardarDato("vcCorreo", correo);
+    var url = "mailto:" + correo.replace(/[?&#]/g, "") +
+              "?subject=" + encodeURIComponent("Invitación a videollamada · sala " + vc.sala) +
+              "&body=" + encodeURIComponent(textoInvitacion("\r\n"));
+    location.href = url;
+    estado("Se abrió tu programa de correo con la invitación a la sala " + vc.sala + ".", "ok");
+  }
+
+  function compartirNativo() {
+    if (!vc.conectado || !navigator.share) { return; }
+    navigator.share({
+      title: "Videollamada · sala " + vc.sala,
+      text: textoInvitacion(),
+      url: enlaceInvitacionPublico()
+    }).catch(function () {});
+  }
+
+  function guardarDato(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function leerDato(k) { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } }
+
+  function pintarCompartir(enSala) {
+    vcCompartir.classList.toggle("oculto", !enSala);
+    if (!enSala) { return; }
+    vcCodigoGrande.textContent = vc.sala;
+    vcEnlaceTexto.textContent = enlaceInvitacionPublico();
+    vcNativo.classList.toggle("oculto", !navigator.share);
+    mover(vcCompartir, { opacity: [0, 1], y: [6, 0] }, { duration: 0.25 });
+  }
+
+  /* ---------- medios locales ---------- */
+
+  function obtenerMedios() {
+    var md = navigator.mediaDevices;
+    if (!md || !md.getUserMedia) { return Promise.resolve(null); }
+    var video = { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } };
+    var audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+    if (selCamara && selCamara.value) { video.deviceId = { ideal: selCamara.value }; }
+    if (selMicro && selMicro.value) { audio.deviceId = { ideal: selMicro.value }; }
+    return md.getUserMedia({ video: video, audio: audio })
+      .catch(function () { return md.getUserMedia({ audio: audio }); })
+      .catch(function () { return md.getUserMedia({ video: video }); })
+      .catch(function () { return null; });
+  }
+
+  /* ---------- mosaico de video ---------- */
+
+  function crearTile(nombre, esYo) {
+    var tile = document.createElement("div");
+    tile.className = "vc-tile" + (esYo ? " yo" : "");
+    var video = document.createElement("video");
+    video.autoplay = true;
+    video.playsInline = true;
+    video.setAttribute("playsinline", "");
+    if (esYo) { video.muted = true; }
+    var avatar = document.createElement("div");
+    avatar.className = "vc-avatar";
+    var inicial = document.createElement("span");
+    avatar.appendChild(inicial);
+    var etiqueta = document.createElement("span");
+    etiqueta.className = "vc-nombre";
+    etiqueta.appendChild(icono("i-mic-off"));
+    var texto = document.createElement("span");
+    etiqueta.appendChild(texto);
+    tile.appendChild(video);
+    tile.appendChild(avatar);
+    tile.appendChild(etiqueta);
+    vcGrid.appendChild(tile);
+    var t = { tile: tile, video: video, texto: texto, inicial: inicial };
+    nombrarTile(t, nombre, esYo);
+    actualizarGrid();
+    mover(tile, { opacity: [0, 1], scale: [0.96, 1] }, { type: "spring", stiffness: 380, damping: 28 });
+    return t;
+  }
+
+  function nombrarTile(t, nombre, esYo) {
+    t.texto.textContent = esYo ? "Tú · " + nombre : nombre;
+    t.inicial.textContent = (nombre || "?").charAt(0).toUpperCase();
+  }
+
+  var botonSonido = null;
+
+  function pedirToqueParaSonido() {
+    if (botonSonido) { return; }
+    botonSonido = document.createElement("button");
+    botonSonido.type = "button";
+    botonSonido.className = "btn btn-cta vc-sonido";
+    botonSonido.textContent = "🔊 Toca aquí para ver y escuchar la llamada";
+    botonSonido.addEventListener("click", function () {
+      vcGrid.querySelectorAll("video").forEach(function (v) {
+        var p = v.play(); if (p && p.catch) { p.catch(function () {}); }
+      });
+      botonSonido.remove();
+      botonSonido = null;
+    });
+    document.body.appendChild(botonSonido);
+  }
+
+  function ponerFlujo(t, s) {
+    t.video.srcObject = s;
+    var p = t.video.play();
+    if (p && p.catch) {
+      p.catch(function (e) {
+        // El navegador no deja reproducir sonido sin un toque previo del usuario.
+        if (e && e.name === "NotAllowedError" && t.video.srcObject === s) { pedirToqueParaSonido(); }
+      });
+    }
+  }
+
+  function actualizarGrid() {
+    var hay = vcGrid.querySelectorAll(".vc-tile").length > 0;
+    vcVacio.classList.toggle("oculto", hay);
+    var n = Object.keys(vc.pares).length + 1;
+    if (vc.conectado) {
+      vcHint.textContent = "Sala " + vc.sala + " · " + n + (n === 1 ? " participante" : " participantes");
+      chatHint.textContent = "En vivo · " + n;
+    } else {
+      vcHint.textContent = vc.peer ? "Conectando…" : "Sin conectar";
+      chatHint.textContent = "Sin conectar";
+    }
+  }
+
+  function aplicarEspejo() {
+    if (vc.tileLocal) { vc.tileLocal.tile.classList.toggle("espejo", !!(espejo && espejo.checked)); }
+  }
+
+  function refrescarTileLocal() {
+    if (!vc.tileLocal) { return; }
+    var tieneVideo = !!(vc.local && vc.local.getVideoTracks().length && vc.camOn);
+    vc.tileLocal.tile.classList.toggle("con-video", tieneVideo);
+    vc.tileLocal.tile.classList.toggle("mudo", !vc.local || !vc.local.getAudioTracks().length || !vc.micOn);
+  }
+
+  /* ---------- participantes ---------- */
+
+  function obtenerPar(id) {
+    var par = vc.pares[id];
+    if (par) { return par; }
+    par = { id: id, nombre: "Participante", datos: null, llamada: null, saludado: false, camOn: true, micOn: true, conVideo: false };
+    var t = crearTile(par.nombre, false);
+    par.tile = t.tile; par.video = t.video; par.texto = t.texto; par.inicial = t.inicial;
+    vc.pares[id] = par;
+    actualizarGrid();
+    return par;
+  }
+
+  function nombrarPar(par, nombre) {
+    nombre = limpiarNombre(nombre);
+    if (!nombre) { return; }
+    par.nombre = nombre;
+    nombrarTile(par, nombre, false);
+  }
+
+  function refrescarTilePar(par) {
+    par.tile.classList.toggle("con-video", par.conVideo && par.camOn);
+    par.tile.classList.toggle("mudo", !par.micOn);
+  }
+
+  function quitarPar(id, silencioso) {
+    var par = vc.pares[id];
+    if (!par) { return; }
+    delete vc.pares[id];
+    try { if (par.datos) { par.datos.close(); } } catch (e) {}
+    try { if (par.llamada) { par.llamada.close(); } } catch (e) {}
+    par.video.srcObject = null;
+    par.tile.remove();
+    actualizarGrid();
+    if (par.saludado && !silencioso) { sistema(par.nombre + " salió de la sala"); }
+  }
+
+  /* ---------- conexiones ---------- */
+
+  function enviar(conn, obj) {
+    try { if (conn && conn.open) { conn.send(obj); } } catch (e) {}
+  }
+
+  function difundir(obj) {
+    Object.keys(vc.pares).forEach(function (id) { enviar(vc.pares[id].datos, obj); });
+  }
+
+  function llamar(par) {
+    if (!vc.peer || !vc.local || par.llamada) { return; }
+    var call = vc.peer.call(par.id, vc.local, { metadata: { nombre: vc.nombre } });
+    if (call) { registrarLlamada(call); }
+  }
+
+  // El que llega se conecta con todos los que ya estaban.
+  function conectarCon(id) {
+    if (!vc.peer || id === vc.peer.id) { return; }
+    var par = obtenerPar(id);
+    par.yoInicie = true;
+    if (!par.datos) {
+      registrarDatos(vc.peer.connect(id, { reliable: true, metadata: { nombre: vc.nombre } }));
+    }
+    llamar(par);
+  }
+
+  function registrarDatos(conn) {
+    if (!conn) { return; }
+    var par = obtenerPar(conn.peer);
+    if (par.datos && par.datos !== conn) { try { par.datos.close(); } catch (e) {} }
+    par.datos = conn;
+
+    conn.on("open", function () {
+      if (!vc.anfitrion && conn.peer === PREFIJO + vc.sala && !vc.conectado) { alConectar(); }
+      enviar(conn, { t: "hola", nombre: vc.nombre, mic: vc.micOn, cam: vc.camOn });
+      if (!vc.local) { enviar(conn, { t: "llamame" }); }
+    });
+    conn.on("data", function (d) { recibirDatos(par, conn, d); });
+    conn.on("close", function () {
+      if (par.datos === conn) { par.datos = null; quitarPar(par.id); }
+    });
+    conn.on("error", function () {});
+  }
+
+  function recibirDatos(par, conn, d) {
+    if (!d || typeof d !== "object" || vc.pares[par.id] !== par) { return; }
+    switch (d.t) {
+      case "hola":
+        nombrarPar(par, d.nombre);
+        par.micOn = d.mic !== false;
+        par.camOn = d.cam !== false;
+        refrescarTilePar(par);
+        if (vc.anfitrion) {
+          var otros = Object.keys(vc.pares).filter(function (id) { return id !== par.id && vc.pares[id].datos; });
+          enviar(conn, { t: "lista", pares: otros });
+        }
+        if (!par.saludado) {
+          par.saludado = true;
+          sistema(par.yoInicie ? "Conectado con " + par.nombre : par.nombre + " se unió a la sala");
+        }
+        break;
+      case "lista":
+        if (Array.isArray(d.pares)) {
+          d.pares.slice(0, 20).forEach(function (id) { if (typeof id === "string") { conectarCon(id); } });
+        }
+        break;
+      case "llamame":
+        llamar(par);
+        break;
+      case "estado":
+        par.micOn = d.mic !== false;
+        par.camOn = d.cam !== false;
+        refrescarTilePar(par);
+        break;
+      case "msg":
+        if (typeof d.texto === "string" && d.texto.trim()) {
+          pintarMensaje(par.nombre, d.texto.slice(0, 1000), typeof d.hora === "number" ? d.hora : Date.now(), false);
+        }
+        break;
+      case "adios":
+        quitarPar(par.id);
+        break;
+    }
+  }
+
+  function registrarLlamada(call) {
+    var par = obtenerPar(call.peer);
+    if (par.llamada && par.llamada !== call) { try { par.llamada.close(); } catch (e) {} }
+    par.llamada = call;
+    call.on("stream", function (s) {
+      if (par.llamada !== call) { return; }
+      par.conVideo = s.getVideoTracks().length > 0;
+      ponerFlujo(par, s);
+      refrescarTilePar(par);
+    });
+    call.on("close", function () {
+      if (par.llamada !== call) { return; }
+      par.llamada = null;
+      par.conVideo = false;
+      par.video.srcObject = null;
+      refrescarTilePar(par);
+    });
+    call.on("error", function () {});
+  }
+
+  function recibirLlamada(call) {
+    var par = obtenerPar(call.peer);
+    if (call.metadata && call.metadata.nombre) { nombrarPar(par, call.metadata.nombre); }
+    try { call.answer(vc.local || undefined); } catch (e) { return; }
+    registrarLlamada(call);
+  }
+
+  function errorPeer(peer, e) {
+    if (vc.peer !== peer) { return; }
+    var tipo = (e && e.type) || "";
+    if (tipo === "unavailable-id") {
+      salir(true);
+      estado("La sala " + vc.sala + " ya existe: pulsa Unirse para entrar en ella.", "error");
+    } else if (tipo === "peer-unavailable") {
+      if (!vc.conectado && !vc.anfitrion) {
+        esperarAnfitrion(peer);
+      } else if (!vc.conectado) {
+        var sala = vc.sala;
+        salir(true);
+        estado("No se encontró la sala " + sala + ". Revisa el código o pide que la creen de nuevo.", "error");
+      } else {
+        var m = /peer\s+(\S+)/i.exec((e && e.message) || "");
+        if (m && vc.pares[m[1]]) { quitarPar(m[1], true); }
+      }
+    } else if (tipo === "browser-incompatible") {
+      salir(true);
+      estado("Tu navegador no soporta videollamadas WebRTC. Usa Chrome, Edge, Firefox o Safari actualizados.", "error");
+    } else if (tipo === "network" || tipo === "server-error" || tipo === "socket-error" || tipo === "socket-closed") {
+      if (!vc.conectado) {
+        salir(true);
+        estado("No se pudo conectar con el servidor de la videollamada. Revisa tu conexión a internet.", "error");
+      } else {
+        estado("Conexión inestable con el servidor; las llamadas activas siguen funcionando.", "error");
+      }
+    } else if (!vc.conectado) {
+      salir(true);
+      estado("No se pudo conectar: " + ((e && e.message) || "error desconocido"), "error");
+    }
+  }
+
+  // La sala aún no existe (el anfitrión no la ha creado o está recargando): reintentar.
+  function esperarAnfitrion(peer) {
+    if (vc.reintento) { return; }            // ya hay un intento programado
+    if (vc.espera) { clearTimeout(vc.espera); vc.espera = null; }
+    var idSala = PREFIJO + vc.sala;
+    quitarPar(idSala, true);
+    if (vc.intentos >= MAX_INTENTOS) {
+      var sala = vc.sala;
+      salir(true);
+      estado("La sala " + sala + " no está abierta. Pide a quien te invitó que pulse «Crear sala» y vuelve a pulsar Unirse.", "error");
+      return;
+    }
+    estado("Esperando a que se abra la sala " + vc.sala + "… (se reintenta solo)");
+    vc.reintento = setTimeout(function () {
+      vc.reintento = null;
+      if (vc.peer === peer && !vc.conectado) { intentarSala(peer); }
+    }, ESPERA_REINTENTO);
+  }
+
+  function intentarSala(peer) {
+    vc.intentos++;
+    conectarCon(PREFIJO + vc.sala);
+    if (vc.espera) { clearTimeout(vc.espera); }
+    vc.espera = setTimeout(function () {
+      vc.espera = null;
+      if (vc.peer === peer && !vc.conectado && !vc.reintento) {
+        var sala = vc.sala;
+        salir(true);
+        estado("Se encontró la sala " + sala + ", pero no se pudo establecer la conexión. " +
+               "Puede que la red la bloquee: prueba con otra red (por ejemplo, datos móviles) y pulsa Unirse.", "error");
+      }
+    }, 20000);
+  }
+
+  /* ---------- entrar / salir ---------- */
+
+  function bloquearFormulario(b) {
+    vcNombre.disabled = b; vcSala.disabled = b;
+    vcCrear.disabled = b; vcUnirse.disabled = b;
+  }
+
+  function mostrarControles(enSala) {
+    [vcCrear, vcUnirse].forEach(function (b) { b.classList.toggle("oculto", enSala); });
+    [vcMic, vcCam, vcInvitar, vcSalir].forEach(function (b) { b.classList.toggle("oculto", !enSala); });
+    var conAudio = !!(vc.local && vc.local.getAudioTracks().length);
+    var conVideo = !!(vc.local && vc.local.getVideoTracks().length);
+    vcMic.disabled = !conAudio;
+    vcCam.disabled = !conVideo;
+    chatTexto.disabled = !enSala;
+    chatEnviar.disabled = !enSala;
+    pintarCompartir(enSala);
+  }
+
+  function pintarBotonesMedios() {
+    vcMic.classList.toggle("apagado", !vc.micOn);
+    vcMic.setAttribute("aria-pressed", vc.micOn ? "false" : "true");
+    vcMic.querySelector("use").setAttribute("href", vc.micOn ? "#i-mic" : "#i-mic-off");
+    vcMic.querySelector("span").textContent = vc.micOn ? "Silenciar" : "Activar micrófono";
+    vcCam.classList.toggle("apagado", !vc.camOn);
+    vcCam.setAttribute("aria-pressed", vc.camOn ? "false" : "true");
+    vcCam.querySelector("span").textContent = vc.camOn ? "Apagar cámara" : "Encender cámara";
+  }
+
+  function entrar(crear) {
+    if (vc.peer) { return; }
+    if (typeof window.Peer !== "function") {
+      estado("No se pudo cargar PeerJS. Revisa tu conexión a internet y recarga la página.", "error");
+      return;
+    }
+    var nombre = limpiarNombre(vcNombre.value) || (crear ? "Anfitrión" : "Invitado " + aleatorio(3, "0123456789"));
+    vcNombre.value = nombre;
+    guardarNombre(nombre);
+    var codigo = limpiarCodigo(vcSala.value);
+    if (!crear && !codigo) {
+      estado("Escribe el código de la sala o pulsa Crear sala.", "error");
+      vcSala.focus();
+      return;
+    }
+    if (crear && !codigo) { codigo = aleatorio(6); }
+    vcSala.value = codigo;
+
+    bloquearFormulario(true);
+    estado("Pidiendo permiso para usar cámara y micrófono…");
+
+    obtenerMedios().then(function (s) {
+      vc.local = s;
+      vc.nombre = nombre;
+      vc.sala = codigo;
+      vc.anfitrion = crear;
+      vc.micOn = true;
+      vc.camOn = true;
+
+      vc.tileLocal = crearTile(nombre, true);
+      if (s) { ponerFlujo(vc.tileLocal, s); }
+      aplicarEspejo();
+      refrescarTileLocal();
+
+      estado(s ? "Conectando…" : "Sin cámara ni micrófono: entrarás solo para ver, escuchar y chatear. Conectando…");
+
+      var peer;
+      try {
+        peer = crear ? new window.Peer(PREFIJO + codigo, OPCIONES) : new window.Peer(OPCIONES);
+      } catch (e) {
+        salir(true);
+        estado("No se pudo iniciar la conexión: " + e.message, "error");
+        return;
+      }
+      vc.peer = peer;
+      actualizarGrid();
+
+      peer.on("open", function () {
+        if (vc.peer !== peer) { return; }
+        if (crear) {
+          alConectar();
+        } else if (!vc.conectado) {
+          estado("Conectando con la sala " + codigo + "…");
+          vc.intentos = 0;
+          intentarSala(peer);
+        }
+      });
+      peer.on("connection", function (conn) {
+        if (vc.peer !== peer) { return; }
+        if (conn.metadata && conn.metadata.nombre) { nombrarPar(obtenerPar(conn.peer), conn.metadata.nombre); }
+        registrarDatos(conn);
+      });
+      peer.on("call", function (call) { if (vc.peer === peer) { recibirLlamada(call); } });
+      peer.on("disconnected", function () {
+        if (vc.peer === peer && !peer.destroyed) { try { peer.reconnect(); } catch (e) {} }
+      });
+      peer.on("error", function (e) { errorPeer(peer, e); });
+    });
+  }
+
+  function alConectar() {
+    vc.conectado = true;
+    if (vc.espera) { clearTimeout(vc.espera); vc.espera = null; }
+    mostrarControles(true);
+    pintarBotonesMedios();
+    actualizarGrid();
+    if (vc.espera) { clearTimeout(vc.espera); vc.espera = null; }
+    if (vc.reintento) { clearTimeout(vc.reintento); vc.reintento = null; }
+    try {
+      history.replaceState(null, "", location.pathname + (vc.anfitrion ? "" : sufijoSala(vc.sala)));
+    } catch (e) {}
+    if (chatVacio.parentNode) { chatVacio.remove(); }
+    sistema(vc.anfitrion ? "Creaste la sala " + vc.sala : "Entraste a la sala " + vc.sala);
+    estado(vc.anfitrion
+      ? "Sala " + vc.sala + " creada. Envía la invitación por WhatsApp o correo."
+      : "Estás en la sala " + vc.sala + ".", "ok");
+  }
+
+  function salir(silencioso) {
+    var estaba = vc.conectado;
+    if (vc.espera) { clearTimeout(vc.espera); vc.espera = null; }
+    if (vc.reintento) { clearTimeout(vc.reintento); vc.reintento = null; }
+    vc.intentos = 0;
+    if (botonSonido) { botonSonido.remove(); botonSonido = null; }
+    difundir({ t: "adios" });
+    Object.keys(vc.pares).forEach(function (id) { quitarPar(id, true); });
+    vc.pares = {};
+    if (vc.peer) {
+      var p = vc.peer;
+      vc.peer = null;
+      setTimeout(function () { try { p.destroy(); } catch (e) {} }, 150);
+    }
+    if (vc.local) {
+      vc.local.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
+      vc.local = null;
+    }
+    if (vc.tileLocal) { vc.tileLocal.tile.remove(); vc.tileLocal = null; }
+    vc.conectado = false;
+    vc.anfitrion = false;
+    bloquearFormulario(false);
+    mostrarControles(false);
+    actualizarGrid();
+    limpiarUrl();
+    if (estaba) { sistema("Saliste de la sala"); }
+    if (!silencioso) { estado("Saliste de la videollamada."); }
+  }
+
+  /* ---------- chat ---------- */
+
+  function alFinal() {
+    return chatMensajes.scrollHeight - chatMensajes.scrollTop - chatMensajes.clientHeight < 60;
+  }
+
+  function agregarAlChat(el, forzar) {
+    var bajar = forzar || alFinal();
+    if (chatVacio.parentNode) { chatVacio.remove(); }
+    chatMensajes.appendChild(el);
+    while (chatMensajes.children.length > 300) { chatMensajes.removeChild(chatMensajes.firstChild); }
+    if (bajar) { chatMensajes.scrollTop = chatMensajes.scrollHeight; }
+    mover(el, { opacity: [0, 1], y: [8, 0] }, { duration: 0.22 });
+  }
+
+  function sistema(texto) {
+    var el = document.createElement("div");
+    el.className = "chat-sistema";
+    el.textContent = texto;
+    agregarAlChat(el, false);
+  }
+
+  function pintarMensaje(autor, texto, ms, mio) {
+    var el = document.createElement("div");
+    el.className = "chat-msg" + (mio ? " mio" : "");
+    var cab = document.createElement("div");
+    cab.className = "autor";
+    var quien = document.createElement("span");
+    quien.textContent = mio ? "Tú" : autor;
+    var t = document.createElement("time");
+    t.textContent = hora(ms);
+    cab.appendChild(quien);
+    cab.appendChild(t);
+    var cuerpo = document.createElement("div");
+    cuerpo.className = "texto";
+    cuerpo.textContent = texto;
+    el.appendChild(cab);
+    el.appendChild(cuerpo);
+    agregarAlChat(el, mio);
+  }
+
+  chatForm.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var texto = chatTexto.value.trim().slice(0, 1000);
+    if (!texto || !vc.conectado) { return; }
+    var m = { t: "msg", nombre: vc.nombre, texto: texto, hora: Date.now() };
+    difundir(m);
+    pintarMensaje(vc.nombre, texto, m.hora, true);
+    chatTexto.value = "";
+    chatTexto.focus();
+  });
+
+  /* ---------- eventos ---------- */
+
+  vcCrear.addEventListener("click", function () { entrar(true); });
+  vcUnirse.addEventListener("click", function () { entrar(false); });
+  vcSalir.addEventListener("click", function () { salir(false); });
+  [vcNombre, vcSala].forEach(function (inp) {
+    inp.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter") { ev.preventDefault(); entrar(!limpiarCodigo(vcSala.value)); }
+    });
+  });
+  vcSala.addEventListener("input", function () {
+    var limpio = limpiarCodigo(vcSala.value);
+    if (limpio !== vcSala.value) { vcSala.value = limpio; }
+  });
+
+  vcMic.addEventListener("click", function () {
+    if (!vc.local) { return; }
+    vc.micOn = !vc.micOn;
+    vc.local.getAudioTracks().forEach(function (t) { t.enabled = vc.micOn; });
+    pintarBotonesMedios();
+    refrescarTileLocal();
+    difundir({ t: "estado", mic: vc.micOn, cam: vc.camOn });
+  });
+
+  vcCam.addEventListener("click", function () {
+    if (!vc.local) { return; }
+    vc.camOn = !vc.camOn;
+    vc.local.getVideoTracks().forEach(function (t) { t.enabled = vc.camOn; });
+    pintarBotonesMedios();
+    refrescarTileLocal();
+    difundir({ t: "estado", mic: vc.micOn, cam: vc.camOn });
+  });
+
+  vcInvitar.addEventListener("click", function () {
+    var lbl = vcInvitar.querySelector("span");
+    var texto = textoInvitacion();
+    var listo = function () {
+      lbl.textContent = "¡Invitación copiada!";
+      setTimeout(function () { lbl.textContent = "Copiar invitación"; }, 1800);
+      estado("Invitación copiada: " + enlaceInvitacionPublico(), "ok");
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(texto).then(listo, function () { window.prompt("Copia la invitación:", texto); });
+    } else {
+      window.prompt("Copia la invitación:", texto);
+    }
+  });
+
+  vcWhatsapp.addEventListener("click", enviarWhatsapp);
+  vcEmail.addEventListener("click", enviarCorreo);
+  vcNativo.addEventListener("click", compartirNativo);
+  vcTel.value = leerDato("vcTel");
+  vcCorreo.value = leerDato("vcCorreo");
+
+  if (espejo) { espejo.addEventListener("change", aplicarEspejo); }
+
+  window.addEventListener("pagehide", function () {
+    if (vc.peer) { difundir({ t: "adios" }); try { vc.peer.destroy(); } catch (e) {} }
+  });
+
+  /* ---------- inicio ---------- */
+
+  vcNombre.value = leerNombre();
+  function codigoInvitacion() {
+    var m = /[#&?]sala=([A-Za-z0-9]+)/.exec(location.hash) || /[?&]sala=([A-Za-z0-9]+)/.exec(location.search);
+    return m ? limpiarCodigo(m[1]) : "";
+  }
+
+  function leerInvitacion() {
+    if (vc.peer) { return; }
+    // Iniciar_grabador.bat abre la app con "?crear=CODIGO": creamos esa sala automáticamente
+    // para que coincida con el enlace de invitación que el .bat ya copió.
+    var crear = /[?&]crear=([A-Za-z0-9]+)/.exec(location.search);
+    if (crear && typeof window.Peer === "function") {
+      vcSala.value = limpiarCodigo(crear[1]);
+      try { history.replaceState(null, "", location.pathname); } catch (e) {}
+      estado("Creando la sala " + vcSala.value + "… (permite el uso de cámara y micrófono)", "ok");
+      setTimeout(function () { if (!vc.peer) { entrar(true); } }, 400);
+      return;
+    }
+    var codigo = codigoInvitacion();
+    if (!codigo) { return; }
+    vcSala.value = codigo;
+    if (typeof window.Peer !== "function") { return; }
+    // Entramos solos: el invitado solo tiene que abrir el enlace y permitir cámara y micrófono.
+    estado("Te invitaron a la sala " + codigo + ". Conectando… (permite el uso de cámara y micrófono)", "ok");
+    setTimeout(function () { if (!vc.peer) { entrar(false); } }, 400);
+  }
+  leerInvitacion();
+  window.addEventListener("hashchange", leerInvitacion);
+  if (typeof window.Peer !== "function") {
+    estado("No se pudo cargar PeerJS: la videollamada necesita conexión a internet.", "error");
+  }
+  actualizarGrid();
+
+  // Gancho de solo lectura para pruebas automáticas.
+  window.__llamada = {
+    estado: function () {
+      return {
+        conectado: vc.conectado,
+        sala: vc.sala,
+        anfitrion: vc.anfitrion,
+        participantes: Object.keys(vc.pares).map(function (id) {
+          var p = vc.pares[id];
+          return { nombre: p.nombre, conVideo: !!(p.video && p.video.srcObject), datos: !!(p.datos && p.datos.open) };
+        }),
+        mensajes: chatMensajes.querySelectorAll(".chat-msg").length
+      };
+    }
+  };
+})();
+</script>
+</body>
+</html>
