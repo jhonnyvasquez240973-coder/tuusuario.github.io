@@ -1,1 +1,2 @@
-*.bat text eol=crlf
+# Los .bat se guardan tal cual (CRLF) para que Windows los lea bien al descargarlos de GitHub
+*.bat -text

@@ -1,11 +1,14 @@
 @echo off
-chcp 65001 >nul
+if not "%~1"=="_abierto" (
+  cmd /k ""%~f0" _abierto"
+  exit /b
+)
 setlocal EnableDelayedExpansion
 TITLE Mi Grabador v3 - Panel de control
 color 0A
 cd /d "%~dp0"
 
-:: Página pública (GitHub Pages). El invitado entra aquí, sin ngrok.
+:: Pagina publica (GitHub Pages). El invitado entra aqui, sin ngrok.
 set "PUBLICA=https://jhonnyvasquez240973-coder.github.io/tuusuario.github.io/"
 
 echo ========================================================
@@ -13,8 +16,8 @@ echo   INICIANDO MI GRABADOR v3 (videollamada + chat)
 echo ========================================================
 echo.
 
-:: ---------- 1. Código de sala aleatorio ----------
-:: Tu navegador crea esta sala solo y la invitación ya la incluye.
+:: ---------- 1. Codigo de sala aleatorio ----------
+:: Tu navegador crea esta sala solo y la invitacion ya la incluye.
 set "ABC=ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 set "SALA="
 for /L %%i in (1,1,6) do (
@@ -23,29 +26,29 @@ for /L %%i in (1,1,6) do (
 )
 set "INVITACION=!PUBLICA!?sala=!SALA!#sala=!SALA!"
 
-:: ---------- 2. ¿Está en línea la página pública? ----------
-echo [1/3] Comprobando la página en línea ...
+:: ---------- 2. Esta en linea la pagina publica? ----------
+echo [1/3] Comprobando la pagina en linea ...
 set "MODO=local"
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; $r = Invoke-WebRequest -Uri '%PUBLICA%' -UseBasicParsing -Method Head -TimeoutSec 8; if ($r.StatusCode -lt 400) { exit 0 } else { exit 1 } } catch { exit 1 }"
 if not errorlevel 1 set "MODO=publico"
 
 if "!MODO!"=="publico" (
-  echo       En línea: !PUBLICA!
+  echo       En linea: !PUBLICA!
   echo [2/3] Abriendo el navegador con la sala !SALA! ...
   start "" "!PUBLICA!?crear=!SALA!"
   goto :invitar
 )
 
 :: ---------- 3. Respaldo: servidor local ----------
-echo       No se pudo abrir la página en línea; uso el servidor local.
+echo       No se pudo abrir la pagina en linea; uso el servidor local.
 set "HTML="
 if exist "index.html" set "HTML=index.html"
 if not defined HTML if exist "grabador.html" set "HTML=grabador.html"
 if not defined HTML for %%F in ("grabador*.html" "*.html") do if not defined HTML set "HTML=%%~nxF"
 if not defined HTML (
-  echo [ERROR] No hay conexión con la página en línea y no encuentro
-  echo         ningún .html en esta carpeta: !CD!
+  echo [ERROR] No hay conexion con la pagina en linea y no encuentro
+  echo         ningun .html en esta carpeta: !CD!
   echo         Revisa tu internet o copia "index.html" junto a este .bat.
   goto :fin_error
 )
@@ -55,14 +58,14 @@ set "PY="
 py -3 --version >nul 2>&1 && set "PY=py -3"
 if not defined PY python --version >nul 2>&1 && set "PY=python"
 if not defined PY (
-  echo [ERROR] No encuentro Python. Instálalo desde https://www.python.org/downloads/
-  echo         y marca "Add python.exe to PATH" durante la instalación.
+  echo [ERROR] No encuentro Python. Instalalo desde https://www.python.org/downloads/
+  echo         y marca "Add python.exe to PATH" durante la instalacion.
   goto :fin_error
 )
 
 netstat -ano | findstr /R /C:":8000 .*LISTENING" >nul
 if not errorlevel 1 (
-  echo [ERROR] El puerto 8000 ya está en uso. ¿Tienes otra ventana del grabador abierta?
+  echo [ERROR] El puerto 8000 ya esta en uso. Tienes otra ventana del grabador abierta?
   goto :fin_error
 )
 
@@ -77,19 +80,19 @@ echo.
 echo ========================================================
 echo   TODO LISTO - Sala creada: !SALA!
 echo.
-echo   ENLACE DE INVITACIÓN (ya copiado al portapapeles):
+echo   ENLACE DE INVITACION (ya copiado al portapapeles):
 echo   !INVITACION!
 echo.
-echo   Tu invitado solo abre el enlace y permite cámara y
-echo   micrófono: se conecta solo a la videollamada y al chat.
+echo   Tu invitado solo abre el enlace y permite camara y
+echo   microfono: se conecta solo a la videollamada y al chat.
 echo ========================================================
 echo.
 
-:: ---------- 4. Enviar invitación ----------
-set "MSG=Hola, te invito a una videollamada con chat en Mi Grabador. Abre este enlace y permite la cámara y el micrófono: !INVITACION! (Código de sala: !SALA!)"
+:: ---------- 4. Enviar invitacion ----------
+set "MSG=Hola, te invito a una videollamada con chat en Mi Grabador. Abre este enlace y permite la camara y el microfono: !INVITACION! (Codigo de sala: !SALA!)"
 :menu
-echo [3/3] ¿Cómo quieres enviar la invitación?
-echo       [W] WhatsApp    [C] Correo    [N] Ninguno (ya está copiada)
+echo [3/3] Como quieres enviar la invitacion?
+echo       [W] WhatsApp    [C] Correo    [N] Ninguno (ya esta copiada)
 choice /C WCN /N /M "      Elige W, C o N: "
 if errorlevel 3 goto :esperar
 if errorlevel 2 goto :correo
@@ -97,7 +100,7 @@ if errorlevel 1 goto :whatsapp
 
 :whatsapp
 set "TEL="
-set /p "TEL=      Número con código de país (Enter = elegir contacto en WhatsApp): "
+set /p "TEL=      Numero con codigo de pais (Enter = elegir contacto en WhatsApp): "
 if defined TEL set "TEL=!TEL: =!"
 if defined TEL set "TEL=!TEL:+=!"
 if defined TEL set "TEL=!TEL:-=!"
@@ -109,11 +112,11 @@ goto :menu
 
 :correo
 set "MAIL="
-set /p "MAIL=      Correo del invitado (Enter = escribirlo después): "
+set /p "MAIL=      Correo del invitado (Enter = escribirlo despues): "
 if defined MAIL set "MAIL=!MAIL: =!"
 powershell -NoProfile -Command ^
-  "$s=[uri]::EscapeDataString('Invitación a videollamada - sala ' + $env:SALA); $b=[uri]::EscapeDataString($env:MSG); Start-Process ('mailto:' + $env:MAIL + '?subject=' + $s + '&body=' + $b)"
-echo       Programa de correo abierto con la invitación.
+  "$s=[uri]::EscapeDataString('Invitacion a videollamada - sala ' + $env:SALA); $b=[uri]::EscapeDataString($env:MSG); Start-Process ('mailto:' + $env:MAIL + '?subject=' + $s + '&body=' + $b)"
+echo       Programa de correo abierto con la invitacion.
 echo.
 goto :menu
 
@@ -129,7 +132,7 @@ if "!MODO!"=="local" (
   echo   La llamada sigue en tu navegador. Puedes cerrar esta ventana.
   pause >nul
 )
-exit /b 0
+exit
 
 :fin_error
 echo.
