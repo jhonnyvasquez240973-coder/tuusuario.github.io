@@ -10,3 +10,6 @@ Página en línea: https://jhonnyvasquez240973-coder.github.io/tuusuario.github.
 
 No hace falta ngrok: la invitación apunta a esta página publicada. Si la página en línea no responde,
 el `.bat` usa un servidor local con Python como respaldo (necesita `index.html` junto al `.bat`).
+
+## Catálogo de vinos
+Sanama Reserva a $15,00 la botella, pedidos con Eunice Vasquez: https://jhonnyvasquez240973-coder.github.io/tuusuario.github.io/vinos/
